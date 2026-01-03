@@ -28,30 +28,82 @@ async function runBackfill(cliArgs) {
       return { status: 'error', error: validation.error };
     }
 
-    const { cluster, clusterName, fromDate, toDate } = validation;
+    const { clusters, fromDate, toDate } = validation;
 
-    // Step 2: Create ES client
+    // If --both flag, run backfill for each cluster independently
+    if (clusters.length > 1) {
+      backfillLogger.logInfo(`[DUAL-CLUSTER MODE] Will backfill both clusters with independent gap detection`);
+      const results = await Promise.allSettled(
+        clusters.map(({ cluster, clusterName }) =>
+          backfillSingleCluster(cluster, clusterName, fromDate, toDate, cliArgs.yes)
+        )
+      );
+
+      // Log final results
+      backfillLogger.logInfo(`[${new Date().toISOString()}] === DUAL-CLUSTER BACKFILL RESULTS ===`);
+      results.forEach((result, idx) => {
+        const clusterName = clusters[idx].clusterName;
+        if (result.status === 'fulfilled') {
+          backfillLogger.logInfo(`[${clusterName}] Result:`, result.value);
+        } else {
+          backfillLogger.logError(`[${clusterName}] Failed:`, result.reason);
+        }
+      });
+
+      return {
+        status: 'success',
+        mode: 'dual-cluster',
+        results: results.map((r, idx) => ({
+          cluster: clusters[idx].clusterName,
+          result: r.status === 'fulfilled' ? r.value : { status: 'error', error: r.reason }
+        }))
+      };
+    }
+
+    // Single cluster mode
+    const { cluster, clusterName } = clusters[0];
+    const result = await backfillSingleCluster(cluster, clusterName, fromDate, toDate, cliArgs.yes);
+    return result;
+
+  } catch (err) {
+    backfillLogger.logError('[runBackfill] [ERROR]', err);
+    return { status: 'error', error: err.message };
+  }
+}
+
+/**
+ * Backfill a single cluster
+ * @param {string} cluster - Cluster key ('ES' or 'STAGING')
+ * @param {string} clusterName - Display name for cluster
+ * @param {number} fromDate - Start date in epoch ms
+ * @param {number} toDate - End date in epoch ms
+ * @param {boolean} skipConfirmation - Skip user confirmation
+ * @returns {object} - Backfill result
+ */
+async function backfillSingleCluster(cluster, clusterName, fromDate, toDate, skipConfirmation) {
+  try {
+    // Step 1: Create ES client
     const client = createEsClient(cluster);
     backfillLogger.logInfo(`[${clusterName}] Created ES client`);
 
-    // Step 3: Find gap boundaries
+    // Step 2: Find gap boundaries for this specific cluster
     backfillLogger.logInfo(`[${clusterName}] Searching for data gap boundaries...`);
     const boundaries = await findDataGapBoundaries(client, fromDate, toDate, clusterName);
 
     if (!boundaries.gapFound) {
       backfillLogger.logInfo(`[${clusterName}] No gap found - data already complete`);
-      return { status: 'success', message: 'No gap found - data already complete' };
+      return { status: 'success', cluster: clusterName, message: 'No gap found - data already complete' };
     }
 
-    // Step 4: Display boundaries and get confirmation
-    const confirmed = confirmBackfill(boundaries, clusterName, cliArgs.yes);
+    // Step 3: Display boundaries and get confirmation
+    const confirmed = confirmBackfill(boundaries, clusterName, skipConfirmation);
 
     if (!confirmed) {
       backfillLogger.logInfo(`[${clusterName}] User cancelled backfill operation`);
-      return { status: 'cancelled', message: 'Backfill cancelled by user' };
+      return { status: 'cancelled', cluster: clusterName, message: 'Backfill cancelled by user' };
     }
 
-    // Step 5: Perform backfill
+    // Step 4: Perform backfill
     backfillLogger.logInfo(`[${new Date().toISOString()}] [${clusterName}] Starting backfill...`);
     const result = await performBackfill(client, clusterName, boundaries.startEpoch, boundaries.endEpoch);
 
@@ -59,8 +111,8 @@ async function runBackfill(cliArgs) {
     return result;
 
   } catch (err) {
-    backfillLogger.logError('[runBackfill] [ERROR]', err);
-    return { status: 'error', error: err.message };
+    backfillLogger.logError(`[${clusterName}] [backfillSingleCluster] ERROR:`, err);
+    return { status: 'error', cluster: clusterName, error: err.message };
   }
 }
 
@@ -71,16 +123,23 @@ async function runBackfill(cliArgs) {
  */
 function validateArgs(args) {
   try {
-    // Validate cluster selection (prod XOR staging)
-    if (!args.prod && !args.staging) {
-      return { valid: false, error: 'Must specify either --prod or --staging' };
-    }
-    if (args.prod && args.staging) {
-      return { valid: false, error: 'Cannot specify both --prod and --staging' };
+    // Validate cluster selection (prod XOR staging XOR both)
+    if (!args.prod && !args.staging && !args.both) {
+      return { valid: false, error: 'Must specify --prod, --staging, or --both' };
     }
 
-    const cluster = args.prod ? 'ES' : 'STAGING';
-    const clusterName = args.prod ? 'PRODUCTION' : 'STAGING';
+    // Build clusters array
+    const clusters = [];
+    if (args.both) {
+      clusters.push(
+        { cluster: 'ES', clusterName: 'PRODUCTION' },
+        { cluster: 'STAGING', clusterName: 'STAGING' }
+      );
+    } else if (args.prod) {
+      clusters.push({ cluster: 'ES', clusterName: 'PRODUCTION' });
+    } else if (args.staging) {
+      clusters.push({ cluster: 'STAGING', clusterName: 'STAGING' });
+    }
 
     // Validate and parse dates
     if (!args.from || !args.to) {
@@ -106,10 +165,11 @@ function validateArgs(args) {
     }
 
     backfillLogger.logInfo('[validateArgs] Validation successful');
+    backfillLogger.logInfo(`[validateArgs] Target clusters: ${clusters.map(c => c.clusterName).join(', ')}`);
+
     return {
       valid: true,
-      cluster,
-      clusterName,
+      clusters,
       fromDate: fromDate.epoch,
       toDate: toDate.epoch
     };
