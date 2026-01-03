@@ -1,4 +1,6 @@
 .env
+prod.env
+staging.env
 node_modules
 data/*
 data_archive/*

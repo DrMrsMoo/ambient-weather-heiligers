@@ -6,8 +6,9 @@ const IndexData = require('./src/dataIndexers');
 const Logger = require('./src/logger');
 const { minDateFromDateObjects } = require('./src/utils');
 const { prepareDataForBulkIndexing, updateProgressState } = require('./main_utils');
-// initialize the classes;
+const { createEsClient } = require('./src/dataIndexers/esClient');
 
+// initialize the classes;
 const awApi = new AmbientWeatherApi({
   apiKey: process.env.AMBIENT_WEATHER_API_KEY,
   applicationKey: process.env.AMBIENT_WEATHER_APPLICATION_KEY
@@ -16,7 +17,14 @@ const mainLogger = new Logger('[main]');
 const fetchRawDataTester = new FetchRawData(awApi, fs);
 const imperialToJsonlConverter = new ConvertImperialToJsonl(fs);
 const imperialToMetricJsonlConverter = new ConvertImperialToMetric(fs);
-const dataIndexer = new IndexData();
+
+// Create ES clients for both production and staging
+const prodClient = createEsClient('ES');
+const stagingClient = createEsClient('STAGING');
+
+// Create indexers for both clusters
+const prodIndexer = new IndexData(prodClient);
+const stagingIndexer = new IndexData(stagingClient);
 
 /**
  * @param {class} logger : mainLogger instance
@@ -134,71 +142,61 @@ async function main() {
     throw err;
   }
 
-  return 'STOP NOW';
+  // Helper function to index data to a specific cluster
+  async function indexToCluster(indexer, clusterName) {
+    try {
+      mainLogger.logInfo(`[${clusterName}] Initializing cluster connection...`);
+      const initResult = await indexer.initialize();
 
+      if (!!initResult === true && initResult.outcome === 'success') {
+        mainLogger.logInfo(`[${clusterName}] Cluster ready! Latest imperial: ${initResult.latestImperialDoc[0]._source.dateutc}, Latest metric: ${initResult.latestMetricDoc[0]._source.dateutc}`);
 
-  stage = step[3];
-  logProgress(mainLogger, stage, stepsStates)
-  const initializeResult = await dataIndexer.initialize();
+        // Index imperial data if available
+        if (imperialJSONLFileNames.length > 0) {
+          const imperialData = prepareDataForBulkIndexing(imperialJSONLFileNames, 'imperial');
+          mainLogger.logInfo(`[${clusterName}] Indexing imperial data...`);
+          await indexer.bulkIndexDocuments(imperialData, 'imperial');
+          mainLogger.logInfo(`[${clusterName}] Imperial data indexed successfully`);
+        }
 
-  if (!!initializeResult === true && initializeResult.outcome === 'success') {
-    stepsStates = updateProgressState({ clusterReady: true }, { info: `indexer cluster ping response ${initializeResult.outcome}` }, mainLogger, { ...stepsStates })
+        // Index metric data if available
+        if (metricJSONLFileNames.length > 0) {
+          const metricData = prepareDataForBulkIndexing(metricJSONLFileNames, 'metric');
+          mainLogger.logInfo(`[${clusterName}] Indexing metric data...`);
+          await indexer.bulkIndexDocuments(metricData, 'metric');
+          mainLogger.logInfo(`[${clusterName}] Metric data indexed successfully`);
+        }
 
-    logProgress(mainLogger, stage, stepsStates);
-
-    lastIndexedImperialDataDate = initializeResult.latestImperialDoc[0]._source.dateutc;
-    lastIndexedMetricDataDate = initializeResult.latestMetricDoc[0]._source.dateutc;
-  } else {
-    stepsStates = updateProgressState({ clusterError: true }, { error: `indexer could not initalize: ${initializeResult.outcome}` }, mainLogger, { ...stepsStates });
-    logProgress(mainLogger, stage, stepsStates)
-  }
-
-  // scenario 1: new data fetched
-  if (datesForNewData && datesForNewData.length > 0) { //use new data
-    stage = step[4];
-    logProgress(mainLogger, stage, stepsStates)
-
-    const dateArrayNeeded = datesForNewData?.map((fromToObj => fromToObj.to))
-    if ((minDateFromDateObjects(dateArrayNeeded) - lastIndexedImperialDataDate) > 0) indexImperialDocsNeeded = true;
-    if ((minDateFromDateObjects(dateArrayNeeded) - lastIndexedMetricDataDate) > 0) indexMetricDocsNeeded = true;
-  }
-
-  // scenario 1 or 2:
-  if (imperialJSONLFileNames.length > 0) {
-    stepsStates = updateProgressState({ dataConvertedToJsonl: true }, { info: `preparing imperial data for bulk index ` }, mainLogger, { ...stepsStates })
-    logProgress(mainLogger, stage, stepsStates)
-    prepAndBulkIndexNewData('imperial', imperialJSONLFileNames, lastIndexedImperialDataDate, { indexImperialDocsNeeded: true })
-  }
-
-  if (metricJSONLFileNames.length > 0) {
-    stepsStates = updateProgressState({ dataConvertedToJsonl: true }, { info: `preparing metric data for bulk index ` }, mainLogger, { ...stepsStates })
-    logProgress(mainLogger, stage, stepsStates)
-
-    prepAndBulkIndexNewData('metric', metricJSONLFileNames, lastIndexedMetricDataDate, { indexMetricDocsNeeded: true })
-  }
-
-  // scenario 3: no new data fetched
-  if (imperialJSONLFileNames.length === 0) {
-    stage = step[5]
-    stepsStates = updateProgressState({ backfillDataFromFile: true }, { info: `no new files, reading exisiting imperial data from file` }, mainLogger, { ...stepsStates })
-    // return;
-    // TODO: add logic to backfill data
-    const imperialDataReadyForBulkCall = prepareDataForBulkIndexing(imperialJSONLFileNames, 'imperial');
-    if (stepsStates.clusterError === false) {
-      await dataIndexer.bulkIndexDocuments(imperialDataReadyForBulkCall, 'imperial')
+        return { cluster: clusterName, status: 'success' };
+      } else {
+        mainLogger.logError(`[${clusterName}] Cluster not ready: ${initResult.outcome}`);
+        return { cluster: clusterName, status: 'failed', reason: initResult.outcome };
+      }
+    } catch (err) {
+      mainLogger.logError(`[${clusterName}] Indexing failed:`, err);
+      return { cluster: clusterName, status: 'error', error: err.message };
     }
   }
 
-  if (metricJSONLFileNames.length === 0) {
-    stage = step[5]
-    stepsStates = updateProgressState({ backfillDataFromFile: true }, { info: `no new files, reading exisiting metric data from file` }, mainLogger, { ...stepsStates })
-    // return;
-    // TODO: add logic to backfill data
-    const metricDataReadyForBulkCall = prepareDataForBulkIndexing(metricJSONLFileNames, 'metric');
-    if (stepsStates.clusterError === false) {
-      await dataIndexer.bulkIndexDocuments(metricDataReadyForBulkCall, 'metric')
+  // Index to both clusters independently - failures in one don't affect the other
+  mainLogger.logInfo('Starting dual-cluster indexing...');
+  const results = await Promise.allSettled([
+    indexToCluster(prodIndexer, 'PRODUCTION'),
+    indexToCluster(stagingIndexer, 'STAGING')
+  ]);
+
+  // Log final results
+  mainLogger.logInfo('=== FINAL RESULTS ===');
+  results.forEach((result, idx) => {
+    const clusterName = idx === 0 ? 'PRODUCTION' : 'STAGING';
+    if (result.status === 'fulfilled') {
+      mainLogger.logInfo(`[${clusterName}] Result:`, result.value);
+    } else {
+      mainLogger.logError(`[${clusterName}] Failed:`, result.reason);
     }
-  }
+  });
+
+  return 'STOP NOW - Legacy code below';
   if (!stepsStates.fatalError === true) {
     mainLogger.logInfo('DONE', stepsStates)
     return 'DONE'

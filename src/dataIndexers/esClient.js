@@ -1,26 +1,31 @@
 const { Client } = require('@elastic/elasticsearch');
 const assert = require('assert');
 
-function initEsClient() {
-  // const envConfig = {
-  //   cloud_id: process.env.STAGING_CLOUD_ID,
-  //   username: process.env.STAGING_ES_USERNAME,
-  //   password: process.env.STAGING_ES_PASSWORD,
-  // }
+/**
+ * Creates an Elasticsearch client for the specified environment
+ * @param {string} envPrefix - Environment prefix ('ES' for production, 'STAGING' for staging)
+ * @returns {Client} Elasticsearch client instance
+ */
+function createEsClient(envPrefix = 'ES') {
+  // Determine environment variable names based on prefix
+  const cloudIdKey = envPrefix === 'ES' ? 'ES_CLOUD_ID' : `${envPrefix}_CLOUD_ID`;
+  const usernameKey = envPrefix === 'ES' ? 'ES_USERNAME' : `${envPrefix}_ES_USERNAME`;
+  const passwordKey = envPrefix === 'ES' ? 'ES_PASSWORD' : `${envPrefix}_ES_PASSWORD`;
+
   const envConfig = {
-    cloud_id: process.env.ES_CLOUD_ID,
-    username: process.env.ES_USERNAME,
-    password: process.env.ES_PASSWORD,
+    cloud_id: process.env[cloudIdKey],
+    username: process.env[usernameKey],
+    password: process.env[passwordKey],
   }
 
   let missingEnvEntries = [];
-  if (!envConfig.cloud_id) missingEnvEntries.push('cloud_id')
-  if (!envConfig.username) missingEnvEntries.push('username')
-  if (!envConfig.password) missingEnvEntries.push('password');
+  if (!envConfig.cloud_id) missingEnvEntries.push(cloudIdKey)
+  if (!envConfig.username) missingEnvEntries.push(usernameKey)
+  if (!envConfig.password) missingEnvEntries.push(passwordKey);
 
-  assert.ok(envConfig.cloud_id, 'Cloud id needs to be configured');
-  assert.ok(envConfig.username, 'Cloud es cluster username needs to be configured');
-  assert.ok(envConfig.password, 'Cloud es cluster password needs to be configured');
+  assert.ok(envConfig.cloud_id, `${cloudIdKey} needs to be configured`);
+  assert.ok(envConfig.username, `${usernameKey} needs to be configured`);
+  assert.ok(envConfig.password, `${passwordKey} needs to be configured`);
 
   const client = new Client({
     cloud: {
@@ -34,6 +39,4 @@ function initEsClient() {
   return client;
 }
 
-const client = initEsClient()
-
-module.exports = client;
+module.exports = { createEsClient };
