@@ -74,7 +74,7 @@ async function main() {
   let stepsStates = { ...states };
 
   stage = step[1];
-  stepsStates = updateProgressState({ fetchNewData: true }, { info: `starting main function at ${new Date()}` }, mainLogger)
+  stepsStates = updateProgressState({ fetchNewData: true }, { info: 'starting main function', includeTimestamp: true }, mainLogger)
   logProgress(mainLogger, stage, stepsStates);
 
   // step 1: fetch new data & convert it to JSONl
@@ -91,7 +91,7 @@ async function main() {
     } else if (Object.keys(getNewDataPromiseResult).includes('dataFetchForDates') && Object.keys(getNewDataPromiseResult).includes('dataFileNames')) {
       // Use the fetched filenames for indexing (whether newly converted or not)
       const fetchedFileNames = getNewDataPromiseResult.dataFileNames;
-      stepsStates = updateProgressState({ newDataFetched: true }, { info: `converting data to metric and JSONL` }, mainLogger, { ...stepsStates })
+      stepsStates = updateProgressState({ newDataFetched: true }, { info: 'converting data to metric and JSONL', includeTimestamp: true }, mainLogger, { ...stepsStates })
       // Convert the data (will skip if already converted)
       convertDataToJsonl();
       // Use the fetched filenames for indexing, not converter results
@@ -103,7 +103,7 @@ async function main() {
       metricJSONLFileNames = [];
     }
 
-    stepsStates = updateProgressState({ dataConvertedToJsonl: true }, { info: `imperialJSONLFileNames ${imperialJSONLFileNames}\n metricJSONLFileNames ${metricJSONLFileNames}` }, mainLogger, { ...stepsStates })
+    stepsStates = updateProgressState({ dataConvertedToJsonl: true }, { info: `imperialJSONLFileNames ${imperialJSONLFileNames}\n metricJSONLFileNames ${metricJSONLFileNames}`, includeTimestamp: true }, mainLogger, { ...stepsStates })
     logProgress(mainLogger, stage, stepsStates)
   } catch (err) {
     stage = step[0];
@@ -137,6 +137,7 @@ async function main() {
           mainLogger.logInfo(`[${clusterName}] Metric data indexed successfully`);
         }
 
+        mainLogger.logInfo(`[${new Date().toISOString()}] [${clusterName}] Indexing complete`);
         return { cluster: clusterName, status: 'success' };
       } else {
         mainLogger.logError(`[${clusterName}] Cluster not ready: ${initResult.outcome}`);
@@ -149,14 +150,14 @@ async function main() {
   }
 
   // Index to both clusters independently - failures in one don't affect the other
-  mainLogger.logInfo('Starting dual-cluster indexing...');
+  mainLogger.logInfo(`[${new Date().toISOString()}] Starting dual-cluster indexing...`);
   const results = await Promise.allSettled([
     indexToCluster(prodIndexer, 'PRODUCTION'),
     indexToCluster(stagingIndexer, 'STAGING')
   ]);
 
   // Log final results
-  mainLogger.logInfo('=== FINAL RESULTS ===');
+  mainLogger.logInfo(`[${new Date().toISOString()}] === FINAL RESULTS ===`);
   results.forEach((result, idx) => {
     const clusterName = idx === 0 ? 'PRODUCTION' : 'STAGING';
     if (result.status === 'fulfilled') {
