@@ -17,7 +17,9 @@
     "convert-units": "^2.3.4",
     "file-system": "^2.2.2",
     "moment": "^2.26.0",
-    "moment-timezone": "^0.5.31"
+    "moment-timezone": "^0.5.31",
+    "readline-sync": "^1.4.10",
+    "yargs": "^17.7.2"
   },
   "devDependencies": {
     "@elastic/elasticsearch-mock": "^0.3.1",
