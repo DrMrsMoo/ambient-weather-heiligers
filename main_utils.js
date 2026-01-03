@@ -74,7 +74,7 @@ const mockedDataType = 'imperial';
 /**
  *
  * @param {Object} stepState containing updated step
- * @param {Object} logMeta containing level: info || warn || error, message: string
+ * @param {Object} logMeta containing level: info || warn || error, message: string, includeTimestamp: boolean (optional)
  * @param { Logger } mainLogger instance
  * @param {Object} oldStates previous progress state
  */
@@ -94,12 +94,22 @@ function updateProgressState(stepState, logMeta, mainLogger, oldStates) {
   }
 
   const newState = { ...oldStates, ...stepState }
+
+  // Helper function to add timestamp to message if requested
+  const formatMessage = (message) => {
+    if (logMeta?.includeTimestamp) {
+      const timestamp = new Date().toISOString();
+      return `[${timestamp}] ${message}`;
+    }
+    return message;
+  };
+
   if (logMeta?.warn) {
-    mainLogger.logWarning(logMeta.warn)
+    mainLogger.logWarning(formatMessage(logMeta.warn))
   } else if (logMeta?.info) {
-    mainLogger.logInfo(`=================\n${logMeta.info}`)
+    mainLogger.logInfo(`=================\n${formatMessage(logMeta.info)}`)
   } else if (logMeta?.error) {
-    mainLogger.logError(logMeta.error, logMeta?.errorInfo)
+    mainLogger.logError(formatMessage(logMeta.error), logMeta?.errorInfo)
   }
   mainLogger.logInfo('[PROGRESS STATE]:', newState)
   return newState
