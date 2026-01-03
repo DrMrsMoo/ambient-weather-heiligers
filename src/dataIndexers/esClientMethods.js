@@ -14,7 +14,7 @@ const esClientLogger = new Logger('esClientLogger');
 async function getClusterInfo(client = esClient) {
   let result;
   try {
-    result = await esClient.info();
+    result = await client.info();
   } catch (err) {
     esClientLogger.logError('[getClusterInfo] [ERROR]', err);
   }
@@ -30,7 +30,7 @@ async function getClusterInfo(client = esClient) {
 async function pingCluster(client = esClient) {
   let pingResult;
   try {
-    pingResult = await esClient.ping();
+    pingResult = await client.ping();
   } catch (err) {
     esClientLogger.logError('[pingCluster] [ERROR]', err);
   }
@@ -46,7 +46,7 @@ async function pingCluster(client = esClient) {
 async function getAllAmbientWeatherIndices(client = require('./esClient')) {
   let clusterIndices;
   try {
-    clusterIndices = await esClient.cat.indices({
+    clusterIndices = await client.cat.indices({
       index: 'ambient_weather_heiligers_*',
       'format': 'json',
       bytes: 'kb',
@@ -74,7 +74,7 @@ async function getAmbientWeatherAliases(client = require('./esClient')) {
   let clusterAliasesResult;
   let error;
   try {
-    const { body, statusCode, headers, meta } = await esClient.cat.aliases({
+    const { body, statusCode, headers, meta } = await client.cat.aliases({
       name: '*ambient-weather-heiligers-*',
       format: 'json',
       h: ['alias', 'index', 'is_write_index'],
@@ -149,7 +149,7 @@ async function deleteIndex(client = require('./esClient'), indexName) {
     expand_wildcards: 'open,closed'
   }
   try {
-    deleteResult = await esClient.indices.delete({
+    deleteResult = await client.indices.delete({
       index: indexName,
       ...deleteIndexDefaultArgs,
     })
