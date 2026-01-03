@@ -162,10 +162,6 @@ async function main() {
       if (!!initResult === true && initResult.outcome === 'success') {
         mainLogger.logInfo(`[${clusterName}] Cluster ready! Latest imperial: ${initResult.latestImperialDoc[0]._source.dateutc}, Latest metric: ${initResult.latestMetricDoc[0]._source.dateutc}`);
 
-        // Debug: Check what we have
-        mainLogger.logInfo(`[${clusterName}] DEBUG: imperialJSONLFileNames =`, imperialJSONLFileNames);
-        mainLogger.logInfo(`[${clusterName}] DEBUG: metricJSONLFileNames =`, metricJSONLFileNames);
-
         // Index imperial data if available
         if (imperialJSONLFileNames.length > 0) {
           const imperialData = prepareDataForBulkIndexing(imperialJSONLFileNames, 'imperial');
