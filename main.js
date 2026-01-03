@@ -4,7 +4,6 @@ const FetchRawData = require('./src/dataFetchers');
 const { ConvertImperialToJsonl, ConvertImperialToMetric } = require('./src/converters');
 const IndexData = require('./src/dataIndexers');
 const Logger = require('./src/logger');
-const { minDateFromDateObjects } = require('./src/utils');
 const { prepareDataForBulkIndexing, updateProgressState } = require('./main_utils');
 const { createEsClient } = require('./src/dataIndexers/esClient');
 
@@ -57,20 +56,6 @@ const states = {
   backfillDataFromFile: false,
 }
 
-const toEarlyForNewData = (promiseResult) => {
-  const promiseResultType = typeof promiseResult;
-  const promiseResultKeysLength = Object.keys(promiseResult).length;
-  const promiseResultContentsExpected = "too early";
-  console.log(`promiseResultType:${promiseResultType}`);
-  console.log(`promiseResultKeysLength:${promiseResultKeysLength}`);
-  console.log(`promiseResultContentsExpected:${promiseResultContentsExpected}`);
-  if (promiseResultKeysLength == 0 && promiseResultType == String && promiseResult == promiseResultContentsExpected) {
-    return true;
-  }
-  return false;
-}
-
-
 const convertDataToJsonl = () => {
   imperial = imperialToJsonlConverter.convertRawImperialDataToJsonl();
   metric = imperialToMetricJsonlConverter.convertImperialDataToMetricJsonl();
@@ -80,35 +65,9 @@ const convertDataToJsonl = () => {
   }
 }
 
-/**
- *
- * @param {string} dataType: imperial | metric
- * @param {string[]} dataFileNames: file names of the files containing new data that has to be indexed
- * @param {Object} stepsStates: state of progress through algorithm
- * @param {string} stage: current algorithm stage
- * @param {Logger} mainLogger
- * @param {boolean} indexDocsNeeded: does data need to be indexed
- */
-async function prepAndBulkIndexNewData(dataType, dataFileNames, stepsStates, lastIndexedDataDate, indexDocsNeeded) {
-  const datesFromFileNames = [...dataFileNames.map(name => name.split('_'))];
-  const maxDateOnFile = Math.max(...datesFromFileNames.map((entry => entry * 1))); // will return NaN for non-integer entries
-
-  if ((maxDateOnFile - lastIndexedDataDate) > 0) indexDocsNeeded = true // flip the switch in case we didn't get new data
-  const dataReadyForBulkCall = prepareDataForBulkIndexing(dataFileNames, dataType);
-  if (!stepsStates.clusterError) {
-    await dataIndexer.bulkIndexDocuments(dataReadyForBulkCall, dataType)
-  }
-}
-
 async function main() {
-  let datesForNewData;
-
   let imperialJSONLFileNames;
   let metricJSONLFileNames;
-  let indexImperialDocsNeeded = false;
-  let indexMetricDocsNeeded = false;
-  let lastIndexedImperialDataDate;
-  let lastIndexedMetricDataDate;
 
   // logging stuff
   let stage;
@@ -122,14 +81,14 @@ async function main() {
   try {
     const getNewDataPromiseResult = await fetchRawDataTester.getDataForDateRanges(false);
     console.log('getNewDataPromiseResult', getNewDataPromiseResult)
-    if (toEarlyForNewData(getNewDataPromiseResult)) {
+    // Check if result is the "too early" string
+    if (getNewDataPromiseResult === 'too early') {
       // advance steps and log
       stepsStates = updateProgressState({ newDataSkipped: true }, { warn: 'too early' }, mainLogger, { ...stepsStates })
       // When too early, set filenames to empty arrays
       imperialJSONLFileNames = [];
       metricJSONLFileNames = [];
     } else if (Object.keys(getNewDataPromiseResult).includes('dataFetchForDates') && Object.keys(getNewDataPromiseResult).includes('dataFileNames')) {
-      datesForNewData = getNewDataPromiseResult.dataFetchForDates;
       // Use the fetched filenames for indexing (whether newly converted or not)
       const fetchedFileNames = getNewDataPromiseResult.dataFileNames;
       stepsStates = updateProgressState({ newDataFetched: true }, { info: `converting data to metric and JSONL` }, mainLogger, { ...stepsStates })
