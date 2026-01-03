@@ -72,26 +72,40 @@ Keep the state tracking and enhance it for better debugging:
 
 ### Step 3: Enhance State Tracking with Timestamps
 
+**Timestamp Configuration**:
+- **Format**: ISO string (e.g., `2026-01-02T19:30:00.000Z`) for readability
+- **Granularity**: Major milestones only (not every state update)
+- **Location**: Log messages only (not stored in state objects)
+
+**Major Milestones to Track**:
+1. Fetch start/complete
+2. Convert start/complete
+3. Cluster indexing start
+4. Production indexing complete
+5. Staging indexing complete
+6. Overall completion
+
 **File**: `/Users/tina/Projects/ambient-weather-heiligers/main_utils.js`
 
 **Changes to `updateProgressState()` function**:
-- Add timestamp to each state update
-- Include timestamp in log messages
-- Format: ISO string or Unix timestamp for consistency
+- Add optional `includeTimestamp` parameter (default: false)
+- When true, prepend ISO timestamp to log messages
+- Format: `[YYYY-MM-DDTHH:mm:ss.sssZ] message`
 
 **File**: `/Users/tina/Projects/ambient-weather-heiligers/main.js`
 
 **Changes**:
-- Add timestamps when updating `stepsStates` throughout lines 117-141
-- Extend state tracking to dual-cluster indexing section (lines 145-197)
-- Add new state flags:
-  - `clusterIndexingStarted` (with timestamp)
-  - `productionIndexingComplete` (with timestamp)
-  - `stagingIndexingComplete` (with timestamp)
-- Update `logProgress()` to show timestamps
-- Ensure all state transitions are logged with timing information
+- Add timestamps to major milestone log messages:
+  - Line 118: Fetch start
+  - Line 131: Convert start
+  - Line 136: Convert complete
+  - Line 182: Dual-cluster indexing start
+  - Inside `indexToCluster()`: Individual cluster completions
+  - Line 189: Final results
+- Keep state tracking simple - no new state flags needed
+- Timestamps only appear in logged output for debugging
 
-**Result**: Complete timeline visibility from fetch → convert → index with precise timing for debugging
+**Result**: Clean timeline of major events with precise timing for debugging, without cluttering the state object
 
 ### Step 4: Verify Current Elasticsearch Method
 
@@ -109,17 +123,25 @@ await client.search({
 
 This is the **recommended pattern** from Elasticsearch documentation for retrieving the last document by timestamp. No changes needed.
 
-### Step 5: Add Verification Method (Optional)
+### Step 5: Create Separate Verification Script (Optional)
 
-**File**: `/Users/tina/Projects/ambient-weather-heiligers/main.js`
+**New File**: `scripts/verify-indexing.js`
 
-**Enhancement**: After indexing completes, verify documents were actually indexed by:
-1. Calling `indexer.getMostRecentIndexedDocuments()` again
-2. Comparing the timestamp before/after indexing
-3. Logging confirmation that new documents are retrievable
-4. Add verification timestamps to state tracking
+**Purpose**: Standalone debugging script to verify data was indexed correctly
 
-This provides end-to-end confirmation that the pipeline works.
+**Functionality**:
+1. Connect to both PRODUCTION and STAGING clusters
+2. Call `indexer.getMostRecentIndexedDocuments()` for each
+3. Display latest document timestamps
+4. Show document counts per index
+5. Verify data retrievability with timestamps
+
+**Usage**:
+```bash
+source .env && node scripts/verify-indexing.js
+```
+
+This provides a separate tool for debugging without adding overhead to the main pipeline.
 
 ### Step 6: Test Execution
 
@@ -175,32 +197,55 @@ node runMainIIFE.js
 
 ## Success Criteria
 
+### Code Fixes
 - [ ] `main_utils.js` line 140 early return removed
 - [ ] `main_utils.js` line 138 pointless Object.keys check removed
 - [ ] `prepareDataForBulkIndexing()` returns formatted array
 - [ ] Unused functions and variables removed from `main.js`
-- [ ] State tracking enhanced with timestamps throughout
-- [ ] Dual-cluster indexing integrated with state tracking
+
+### Timestamp Enhancement
+- [ ] ISO timestamp format added to major milestone logs
+- [ ] 6 major milestones have timestamps (fetch, convert, index stages)
+- [ ] `updateProgressState()` supports optional timestamp parameter
+- [ ] Timestamps appear in log messages only (not in state objects)
+
+### Verification
+- [ ] Separate `scripts/verify-indexing.js` created for debugging
+- [ ] Verification script queries both clusters
+- [ ] Script shows latest documents and counts
+
+### Functionality
 - [ ] Application runs without errors
 - [ ] Data successfully indexes to PRODUCTION cluster
 - [ ] Data successfully indexes to STAGING cluster
-- [ ] `getMostRecentDoc()` retrieves indexed documents
+- [ ] `getMostRecentDoc()` retrieves indexed documents from both clusters
 - [ ] Final results show both clusters succeeded
-- [ ] Logs show complete timeline with timestamps for debugging
+- [ ] Logs show complete timeline with ISO timestamps at major milestones
+
+## Testing Approach
+
+**Clusters Available**: Both PRODUCTION and STAGING clusters available for testing
+
+**Testing Sequence**:
+1. Test locally with full pipeline (fetch → convert → index)
+2. Verify both clusters receive data successfully
+3. Use verification script to confirm data retrievability
+4. Check logs for complete timeline with timestamps
+5. Verify no regressions in existing functionality
 
 ## Risks and Mitigations
 
 **Risk**: Timestamp format inconsistency across different logging points
-**Mitigation**: Use consistent format (ISO string) throughout all state tracking updates
+**Mitigation**: Use consistent ISO string format throughout all log messages
 
 **Risk**: Changes break cron job on Raspberry Pi
-**Mitigation**: Test locally first, verify output matches expected format before deploying
+**Mitigation**: Test locally first with both clusters, verify output format before deploying
 
 **Risk**: Data directories don't exist on first run
 **Mitigation**: Code already handles this in FetchRawData and converters
 
-**Risk**: State tracking adds performance overhead
-**Mitigation**: Timestamps and state updates are lightweight; negligible impact on overall performance
+**Risk**: Timestamp logging adds performance overhead
+**Mitigation**: Only log timestamps at major milestones (6 points total), negligible impact
 
 ## References
 
