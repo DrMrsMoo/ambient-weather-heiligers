@@ -26,6 +26,12 @@ module.exports = (async () => {
         description: 'End date (YYYY-MM-DD)',
         demandOption: true
       })
+      .option('yes', {
+        alias: 'y',
+        type: 'boolean',
+        description: 'Skip confirmation prompt and proceed automatically',
+        default: false
+      })
       .check((argv) => {
         // Validate exactly one of prod/staging
         if (!argv.prod && !argv.staging) {

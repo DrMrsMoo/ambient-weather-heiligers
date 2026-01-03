@@ -44,7 +44,7 @@ async function runBackfill(cliArgs) {
     }
 
     // Step 4: Display boundaries and get confirmation
-    const confirmed = confirmBackfill(boundaries, clusterName);
+    const confirmed = confirmBackfill(boundaries, clusterName, cliArgs.yes);
 
     if (!confirmed) {
       backfillLogger.logInfo(`[${clusterName}] User cancelled backfill operation`);
@@ -148,11 +148,14 @@ async function findDataGapBoundaries(client, fromDate, toDate, clusterName) {
 
     // Query for last document BEFORE fromDate
     backfillLogger.logInfo(`[${clusterName}] Querying for last document before ${moment(fromDate).format('YYYY-MM-DD')}...`);
-    const lastDocBefore = await getMostRecentDoc(
+    const lastDocBefore = await searchDocsByDateRange(
       client,
       imperialIndex,
+      0,
+      fromDate,
       {
         size: 1,
+        sort: ['dateutc:desc'],
         _source: ['date', 'dateutc', '@timestamp'],
         expandWildcards: 'all'
       }
@@ -222,9 +225,10 @@ async function findDataGapBoundaries(client, fromDate, toDate, clusterName) {
  * Display gap boundaries and get user confirmation
  * @param {object} boundaries - Gap boundary information
  * @param {string} clusterName - Cluster name for display
+ * @param {boolean} skipConfirmation - Skip confirmation prompt if true
  * @returns {boolean} - True if user confirms, false otherwise
  */
-function confirmBackfill(boundaries, clusterName) {
+function confirmBackfill(boundaries, clusterName, skipConfirmation = false) {
   console.log('\n========================================');
   console.log(`Gap found in ${clusterName} cluster:`);
   console.log('========================================');
@@ -232,6 +236,11 @@ function confirmBackfill(boundaries, clusterName) {
   console.log(`First document after gap: ${boundaries.endFormatted}`);
   console.log(`Gap duration: ${boundaries.durationHours} hours (${boundaries.durationDays} days)`);
   console.log('========================================\n');
+
+  if (skipConfirmation) {
+    console.log('Auto-confirming (--yes flag provided)...\n');
+    return true;
+  }
 
   const answer = readlineSync.question('Proceed with backfill? (y/n): ');
 
