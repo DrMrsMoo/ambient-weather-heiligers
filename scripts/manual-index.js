@@ -2,23 +2,67 @@ const IndexData = require('../src/dataIndexers');
 const Logger = require('../src/logger');
 const { createEsClient } = require('../src/dataIndexers/esClient');
 const { prepareDataForBulkIndexing } = require('../main_utils');
+const fs = require('fs');
+const path = require('path');
 
 const manualLogger = new Logger('[manual-index]');
 
 /**
- * Manual indexing script - indexes specific files to clusters
- * Usage: source .env && node scripts/manual-index.js
+ * Get all JSONL files from the data directory
+ * @param {number} limit - Number of most recent files to return (0 = all files)
+ * @returns {string[]} Array of filenames without .jsonl extension
+ */
+function getLatestDataFiles(limit = 0) {
+  const dataDir = path.join(__dirname, '../data/ambient-weather-heiligers-imperial-jsonl');
+
+  if (!fs.existsSync(dataDir)) {
+    manualLogger.logWarning(`Data directory not found: ${dataDir}`);
+    return [];
+  }
+
+  // Read all .jsonl files
+  const files = fs.readdirSync(dataDir)
+    .filter(file => file.endsWith('.jsonl'))
+    .map(file => file.replace('.jsonl', ''))
+    .sort(); // Sort by filename (timestamps are sortable)
+
+  if (limit > 0 && files.length > limit) {
+    // Return the most recent files (last N in sorted order)
+    return files.slice(-limit);
+  }
+
+  return files;
+}
+
+/**
+ * Manual indexing script - indexes data files to clusters
+ * Usage:
+ *   source .env && node scripts/manual-index.js [number_of_recent_files]
+ *
+ * Examples:
+ *   node scripts/manual-index.js       # Index all files
+ *   node scripts/manual-index.js 5     # Index 5 most recent files
  */
 async function manualIndex() {
   try {
-    // Files to index (without .jsonl extension)
-    const filesToIndex = [
-      '1767317400000_1767403500000',
-      '1767403800000_1767410100000'
-    ];
+    // Get number of files to index from command line (default: all files)
+    const limitArg = process.argv[2];
+    const limit = limitArg ? parseInt(limitArg, 10) : 0;
+
+    // Get files to index from data directory
+    const filesToIndex = getLatestDataFiles(limit);
+
+    if (filesToIndex.length === 0) {
+      manualLogger.logWarning('No JSONL files found to index!');
+      return;
+    }
 
     manualLogger.logInfo('=== MANUAL INDEXING SCRIPT ===');
-    manualLogger.logInfo(`Files to index: ${filesToIndex.join(', ')}\n`);
+    manualLogger.logInfo(`Found ${filesToIndex.length} file(s) to index`);
+    if (limit > 0) {
+      manualLogger.logInfo(`(Limited to ${limit} most recent files)`);
+    }
+    manualLogger.logInfo(`Files: ${filesToIndex.join(', ')}\n`);
 
     // Create clients
     const prodClient = createEsClient('ES');
