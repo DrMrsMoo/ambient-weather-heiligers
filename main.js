@@ -125,13 +125,24 @@ async function main() {
     if (toEarlyForNewData(getNewDataPromiseResult)) {
       // advance steps and log
       stepsStates = updateProgressState({ newDataSkipped: true }, { warn: 'too early' }, mainLogger, { ...stepsStates })
+      // When too early, set filenames to empty arrays
+      imperialJSONLFileNames = [];
+      metricJSONLFileNames = [];
     } else if (Object.keys(getNewDataPromiseResult).includes('dataFetchForDates') && Object.keys(getNewDataPromiseResult).includes('dataFileNames')) {
       datesForNewData = getNewDataPromiseResult.dataFetchForDates;
+      // Use the fetched filenames for indexing (whether newly converted or not)
+      const fetchedFileNames = getNewDataPromiseResult.dataFileNames;
+      stepsStates = updateProgressState({ newDataFetched: true }, { info: `converting data to metric and JSONL` }, mainLogger, { ...stepsStates })
+      // Convert the data (will skip if already converted)
+      convertDataToJsonl();
+      // Use the fetched filenames for indexing, not converter results
+      imperialJSONLFileNames = fetchedFileNames;
+      metricJSONLFileNames = fetchedFileNames;
+    } else {
+      // No data fetched
+      imperialJSONLFileNames = [];
+      metricJSONLFileNames = [];
     }
-    stepsStates = updateProgressState({ newDataFetched: true }, { info: `converting data to metric and JSONL` }, mainLogger, { ...stepsStates })
-    const fileNamesFromConverter = convertDataToJsonl();
-    imperialJSONLFileNames = fileNamesFromConverter.imperialJSONLFileNames
-    metricJSONLFileNames = fileNamesFromConverter.metricJSONLFileNames
 
     stepsStates = updateProgressState({ dataConvertedToJsonl: true }, { info: `imperialJSONLFileNames ${imperialJSONLFileNames}\n metricJSONLFileNames ${metricJSONLFileNames}` }, mainLogger, { ...stepsStates })
     logProgress(mainLogger, stage, stepsStates)
@@ -150,6 +161,10 @@ async function main() {
 
       if (!!initResult === true && initResult.outcome === 'success') {
         mainLogger.logInfo(`[${clusterName}] Cluster ready! Latest imperial: ${initResult.latestImperialDoc[0]._source.dateutc}, Latest metric: ${initResult.latestMetricDoc[0]._source.dateutc}`);
+
+        // Debug: Check what we have
+        mainLogger.logInfo(`[${clusterName}] DEBUG: imperialJSONLFileNames =`, imperialJSONLFileNames);
+        mainLogger.logInfo(`[${clusterName}] DEBUG: metricJSONLFileNames =`, metricJSONLFileNames);
 
         // Index imperial data if available
         if (imperialJSONLFileNames.length > 0) {

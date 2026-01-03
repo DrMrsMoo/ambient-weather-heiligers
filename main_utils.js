@@ -135,9 +135,7 @@ function prepareDataForBulkIndexing(fileNamesArray, dataType, logger) {
 
   const dataReadyForBulkIndexing = fullFilePaths.flatMap(fullPath => {
     console.log('fullPath', fullPath)
-    if (Object.keys(fullPath).length === 0) return true;
     const dataFileRead = fs.readFileSync(fullPath);
-    return;
     console.log('dataFileRead.toString()', dataFileRead.toString())
     //https://www.elastic.co/guide/en/elasticsearch/client/javascript-api/current/bulk_examples.html
     return dataFileRead.toString().trim().split("\n").flatMap((line) => {
