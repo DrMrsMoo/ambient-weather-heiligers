@@ -2,7 +2,7 @@ const AmbientWeatherApi = require('ambient-weather-api');
 const fs = require('file-system');
 const Logger = require('../logger');
 const { createEsClient } = require('../dataIndexers/esClient');
-const { searchDocsByDateRange, getMostRecentDoc } = require('../dataIndexers/esClientMethods');
+const { searchDocsByDateRange } = require('../dataIndexers/esClientMethods');
 const IndexData = require('../dataIndexers');
 const FetchRawData = require('../dataFetchers');
 const { ConvertImperialToJsonl, ConvertImperialToMetric } = require('../converters');
@@ -33,15 +33,28 @@ async function runBackfill(cliArgs) {
     // If --both flag, run backfill for each cluster independently
     if (clusters.length > 1) {
       backfillLogger.logInfo(`[DUAL-CLUSTER MODE] Will backfill both clusters with independent gap detection`);
-      const results = await Promise.allSettled(
-        clusters.map(({ cluster, clusterName }) =>
-          backfillSingleCluster(cluster, clusterName, fromDate, toDate, cliArgs.yes)
-        )
-      );
+
+      // Process clusters sequentially for better UX when confirmation is needed
+      const results = [];
+      for (let i = 0; i < clusters.length; i++) {
+        const { cluster, clusterName } = clusters[i];
+        const result = await backfillSingleCluster(
+          cluster,
+          clusterName,
+          fromDate,
+          toDate,
+          cliArgs.yes,
+          { clusterIndex: i + 1, totalClusters: clusters.length }
+        );
+        results.push({ status: 'fulfilled', value: result });
+      }
+
+      // Convert to Promise.allSettled format for compatibility with existing code
+      const allSettledResults = results;
 
       // Log final results
       backfillLogger.logInfo(`[${new Date().toISOString()}] === DUAL-CLUSTER BACKFILL RESULTS ===`);
-      results.forEach((result, idx) => {
+      allSettledResults.forEach((result, idx) => {
         const clusterName = clusters[idx].clusterName;
         if (result.status === 'fulfilled') {
           backfillLogger.logInfo(`[${clusterName}] Result:`, result.value);
@@ -53,7 +66,7 @@ async function runBackfill(cliArgs) {
       return {
         status: 'success',
         mode: 'dual-cluster',
-        results: results.map((r, idx) => ({
+        results: allSettledResults.map((r, idx) => ({
           cluster: clusters[idx].clusterName,
           result: r.status === 'fulfilled' ? r.value : { status: 'error', error: r.reason }
         }))
@@ -62,7 +75,7 @@ async function runBackfill(cliArgs) {
 
     // Single cluster mode
     const { cluster, clusterName } = clusters[0];
-    const result = await backfillSingleCluster(cluster, clusterName, fromDate, toDate, cliArgs.yes);
+    const result = await backfillSingleCluster(cluster, clusterName, fromDate, toDate, cliArgs.yes, {});
     return result;
 
   } catch (err) {
@@ -78,9 +91,10 @@ async function runBackfill(cliArgs) {
  * @param {number} fromDate - Start date in epoch ms
  * @param {number} toDate - End date in epoch ms
  * @param {boolean} skipConfirmation - Skip user confirmation
+ * @param {object} context - Optional context (clusterIndex, totalClusters for dual-cluster mode)
  * @returns {object} - Backfill result
  */
-async function backfillSingleCluster(cluster, clusterName, fromDate, toDate, skipConfirmation) {
+async function backfillSingleCluster(cluster, clusterName, fromDate, toDate, skipConfirmation, context = {}) {
   try {
     // Step 1: Create ES client
     const client = createEsClient(cluster);
@@ -96,7 +110,7 @@ async function backfillSingleCluster(cluster, clusterName, fromDate, toDate, ski
     }
 
     // Step 3: Display boundaries and get confirmation
-    const confirmed = confirmBackfill(boundaries, clusterName, skipConfirmation);
+    const confirmed = confirmBackfill(boundaries, clusterName, skipConfirmation, context);
 
     if (!confirmed) {
       backfillLogger.logInfo(`[${clusterName}] User cancelled backfill operation`);
@@ -286,11 +300,19 @@ async function findDataGapBoundaries(client, fromDate, toDate, clusterName) {
  * @param {object} boundaries - Gap boundary information
  * @param {string} clusterName - Cluster name for display
  * @param {boolean} skipConfirmation - Skip confirmation prompt if true
+ * @param {object} context - Optional context (clusterIndex, totalClusters for dual-cluster mode)
  * @returns {boolean} - True if user confirms, false otherwise
  */
-function confirmBackfill(boundaries, clusterName, skipConfirmation = false) {
+function confirmBackfill(boundaries, clusterName, skipConfirmation = false, context = {}) {
+  const { clusterIndex, totalClusters } = context;
+  const isMultiCluster = totalClusters && totalClusters > 1;
+
   console.log('\n========================================');
-  console.log(`Gap found in ${clusterName} cluster:`);
+  if (isMultiCluster) {
+    console.log(`Gap found in ${clusterName} cluster (${clusterIndex} of ${totalClusters}):`);
+  } else {
+    console.log(`Gap found in ${clusterName} cluster:`);
+  }
   console.log('========================================');
   console.log(`Last document before gap: ${boundaries.startFormatted}`);
   console.log(`First document after gap: ${boundaries.endFormatted}`);
@@ -302,7 +324,10 @@ function confirmBackfill(boundaries, clusterName, skipConfirmation = false) {
     return true;
   }
 
-  const answer = readlineSync.question('Proceed with backfill? (y/n): ');
+  const promptMessage = isMultiCluster
+    ? `Proceed with backfill for ${clusterName}? (y/n): `
+    : 'Proceed with backfill? (y/n): ';
+  const answer = readlineSync.question(promptMessage);
 
   return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
 }
@@ -338,7 +363,19 @@ async function performBackfill(client, clusterName, startEpoch, endEpoch) {
       return { status: 'skipped', message: 'Too early to fetch data (less than 5 minutes since last fetch)' };
     }
 
+    // Validate fetchResult structure before destructuring
+    if (!fetchResult || typeof fetchResult !== 'object') {
+      backfillLogger.logError(`[${clusterName}] Invalid fetch result:`, fetchResult);
+      return { status: 'error', error: 'Invalid data fetch result' };
+    }
+
     const { dataFetchForDates, dataFileNames } = fetchResult;
+
+    if (!Array.isArray(dataFetchForDates) || dataFetchForDates.length === 0) {
+      backfillLogger.logWarning(`[${clusterName}] No data fetched from API`);
+      return { status: 'skipped', message: 'No data available in specified range' };
+    }
+
     backfillLogger.logInfo(`[${clusterName}] Fetched ${dataFetchForDates.length} data batches`);
 
     // Step 2: Convert to JSONL

@@ -1,5 +1,7 @@
 #!/bin/zsh
 # Backfill script for Mac/local development
 source $HOME/.zshrc
-cd /Users/Tina/Projects/ambient-weather-heiligers
-/Users/Tina/.nvm/versions/node/v16.13.1/bin/node runBackfill.js "$@"
+# Navigate to script directory (portable)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
+node runBackfill.js "$@"

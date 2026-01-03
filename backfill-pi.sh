@@ -1,5 +1,7 @@
 #!/bin/bash
 # Backfill script for Raspberry Pi
-cd /home/pi/Projects/ambient-weather-heiligers
+# Navigate to script directory (portable)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
 source .env
-/usr/bin/node runBackfill.js "$@"
+node runBackfill.js "$@"

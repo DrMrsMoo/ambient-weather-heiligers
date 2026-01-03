@@ -74,7 +74,7 @@ async function getAmbientWeatherAliases(client = require('./esClient')) {
   let clusterAliasesResult;
   let error;
   try {
-    const { body, statusCode, headers, meta } = await client.cat.aliases({
+    const { body, statusCode } = await client.cat.aliases({
       name: '*ambient-weather-heiligers-*',
       format: 'json',
       h: ['alias', 'index', 'is_write_index'],
@@ -180,7 +180,7 @@ async function getMostRecentDoc(client = require('./esClient'), indexName, opts)
 
   let searchResultBody;
   try {
-    const { body, headers, statusCode, meta } = await client.search({
+    const { body } = await client.search({
       ...searchConfig,
       index: indexName,
       body: {
@@ -217,7 +217,7 @@ async function searchDocsByDateRange(client = require('./esClient'), indexName, 
 
   let searchResultBody;
   try {
-    const { body, headers, statusCode, meta } = await client.search({
+    const { body } = await client.search({
       ...searchConfig,
       index: indexName,
       body: {
