@@ -59,17 +59,23 @@ async function runBackfill(cliArgs) {
         if (result.status === 'fulfilled') {
           backfillLogger.logInfo(`[${clusterName}] Result:`, result.value);
         } else {
-          backfillLogger.logError(`[${clusterName}] Failed:`, result.reason);
+          const errorMessage = result.reason instanceof Error
+            ? result.reason.message
+            : String(result.reason);
+          backfillLogger.logError(`[${clusterName}] Failed:`, errorMessage);
         }
       });
 
       return {
         status: 'success',
         mode: 'dual-cluster',
-        results: allSettledResults.map((r, idx) => ({
-          cluster: clusters[idx].clusterName,
-          result: r.status === 'fulfilled' ? r.value : { status: 'error', error: r.reason }
-        }))
+        results: allSettledResults.map((r, idx) => {
+          const errorValue = r.reason instanceof Error ? r.reason.message : String(r.reason);
+          return {
+            cluster: clusters[idx].clusterName,
+            result: r.status === 'fulfilled' ? r.value : { status: 'error', error: errorValue }
+          };
+        })
       };
     }
 
@@ -236,6 +242,8 @@ async function findDataGapBoundaries(client, fromDate, toDate, clusterName) {
     );
 
     // Query for first document AFTER toDate
+    // Note: searchDocsByDateRange uses gte (>=), so we might get toDate itself.
+    // This is fine because we filter with strict < comparison later when filtering records.
     backfillLogger.logInfo(`[${clusterName}] Querying for first document after ${moment(toDate).format('YYYY-MM-DD')}...`);
     const firstDocAfter = await searchDocsByDateRange(
       client,
@@ -365,8 +373,10 @@ async function performBackfill(client, clusterName, startEpoch, endEpoch) {
       });
       const fetcher = new FetchRawData(awApi, fs);
 
-      // Note: API counts backwards in time, so use endEpoch as the 'from' parameter
-      // bypassRateLimit=true because backfill operates on past data and shouldn't be blocked by rate limiter
+      // Note: API counts backwards in time from endEpoch. The rate limit bypass in FetchRawData
+      // will calculate how many records to fetch based on the gap duration between startEpoch and endEpoch.
+      // We then filter results to the (startEpoch, endEpoch) range after fetching (see line 399).
+      // bypassRateLimit=true because backfill operates on past data and shouldn't be blocked by rate limiter.
       const fetchResult = await fetcher.getDataForDateRanges(true, endEpoch, true); // skipSave=true, fromDate=endEpoch, bypassRateLimit=true
 
       if (fetchResult === 'too early') {
@@ -402,22 +412,57 @@ async function performBackfill(client, clusterName, startEpoch, endEpoch) {
       return { status: 'skipped', message: 'No data available for specified range' };
     }
 
-    // Step 2: Write filtered data directly as JSONL (skip JSON -> JSONL conversion)
-    const tempFileBaseName = `backfill_${startEpoch}_${endEpoch}`;
-    const imperialJsonlPath = `./data/ambient-weather-heiligers-imperial-jsonl/${tempFileBaseName}.jsonl`;
-    const metricJsonlPath = `./data/ambient-weather-heiligers-metric-jsonl/${tempFileBaseName}.jsonl`;
+    // Step 2: Prepare files for indexing
+    let filesForIndexing = [];
+    let tempFileBaseName = null;
 
-    backfillLogger.logInfo(`[${clusterName}] Writing ${dataRecords.length} imperial records to JSONL...`);
-    const imperialJsonlContent = dataRecords.map(record => JSON.stringify(record)).join('\n');
-    fs.writeFileSync(imperialJsonlPath, imperialJsonlContent);
+    if (dataSource === 'local') {
+      // Use existing JSONL files (already converted by loadDataFromLocalFiles)
+      backfillLogger.logInfo(`[${clusterName}] Identifying pre-converted JSONL files...`);
+      const dataDir = './data/ambient-weather-heiligers-imperial';
+      const files = fs.readdirSync(dataDir).filter(f => f.endsWith('.json'));
 
-    // Step 3: Convert imperial to metric and write metric JSONL
-    backfillLogger.logInfo(`[${clusterName}] Converting ${dataRecords.length} records to metric and writing JSONL...`);
-    const metricRecords = dataRecords.map(record => convertToMetric(record));
-    const metricJsonlContent = metricRecords.map(record => JSON.stringify(record)).join('\n');
-    fs.writeFileSync(metricJsonlPath, metricJsonlContent);
+      for (const file of files) {
+        const fileBaseName = file.replace('.json', '');
+        const filePath = `${dataDir}/${file}`;
 
-    // Step 4: Initialize indexer
+        try {
+          const records = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+          // Check if this file has records in our range
+          const hasRelevantRecords = records.some(r =>
+            r.dateutc > startEpoch && r.dateutc < endEpoch
+          );
+
+          if (hasRelevantRecords) {
+            filesForIndexing.push(fileBaseName);
+          }
+        } catch (err) {
+          backfillLogger.logWarning(`[${clusterName}] Error checking ${file}:`, err.message);
+        }
+      }
+
+      backfillLogger.logInfo(`[${clusterName}] Using ${filesForIndexing.length} pre-converted JSONL files`);
+
+    } else {
+      // API source - create temp files
+      tempFileBaseName = `backfill_${startEpoch}_${endEpoch}`;
+      const imperialJsonlPath = `./data/ambient-weather-heiligers-imperial-jsonl/${tempFileBaseName}.jsonl`;
+      const metricJsonlPath = `./data/ambient-weather-heiligers-metric-jsonl/${tempFileBaseName}.jsonl`;
+
+      backfillLogger.logInfo(`[${clusterName}] Writing ${dataRecords.length} imperial records to JSONL...`);
+      const imperialJsonlContent = dataRecords.map(record => JSON.stringify(record)).join('\n');
+      fs.writeFileSync(imperialJsonlPath, imperialJsonlContent);
+
+      backfillLogger.logInfo(`[${clusterName}] Converting ${dataRecords.length} records to metric and writing JSONL...`);
+      const metricRecords = dataRecords.map(record => convertToMetric(record));
+      const metricJsonlContent = metricRecords.map(record => JSON.stringify(record)).join('\n');
+      fs.writeFileSync(metricJsonlPath, metricJsonlContent);
+
+      filesForIndexing = [tempFileBaseName];
+    }
+
+    // Step 3: Initialize indexer
     backfillLogger.logInfo(`[${clusterName}] Initializing indexer...`);
     const initResult = await indexer.initialize();
     if (initResult.outcome !== 'success') {
@@ -425,27 +470,40 @@ async function performBackfill(client, clusterName, startEpoch, endEpoch) {
       return { status: 'error', error: 'Indexer initialization failed' };
     }
 
-    // Step 5: Index imperial data
+    // Step 4: Index imperial data
     backfillLogger.logInfo(`[${clusterName}] Indexing imperial data...`);
-    const imperialPayload = prepareDataForBulkIndexing([tempFileBaseName], 'imperial', backfillLogger);
+    const imperialPayload = prepareDataForBulkIndexing(filesForIndexing, 'imperial', backfillLogger);
     const imperialResult = await indexer.bulkIndexDocuments(imperialPayload, 'imperial');
     backfillLogger.logInfo(`[${clusterName}] Imperial indexing complete. Total docs: ${imperialResult.indexCounts.count}`);
 
-    // Step 6: Index metric data
+    // Step 5: Index metric data
     backfillLogger.logInfo(`[${clusterName}] Indexing metric data...`);
-    const metricPayload = prepareDataForBulkIndexing([tempFileBaseName], 'metric', backfillLogger);
+    const metricPayload = prepareDataForBulkIndexing(filesForIndexing, 'metric', backfillLogger);
     const metricResult = await indexer.bulkIndexDocuments(metricPayload, 'metric');
     backfillLogger.logInfo(`[${clusterName}] Metric indexing complete. Total docs: ${metricResult.indexCounts.count}`);
 
-    // Step 7: Clean up temporary files
-    backfillLogger.logInfo(`[${clusterName}] Cleaning up temporary files...`);
-    if (fs.existsSync(imperialJsonlPath)) fs.unlinkSync(imperialJsonlPath);
-    if (fs.existsSync(metricJsonlPath)) fs.unlinkSync(metricJsonlPath);
+    // Step 6: Clean up temporary files (only if API source)
+    if (dataSource === 'api' && tempFileBaseName) {
+      backfillLogger.logInfo(`[${clusterName}] Cleaning up temporary files...`);
+      const imperialJsonlPath = `./data/ambient-weather-heiligers-imperial-jsonl/${tempFileBaseName}.jsonl`;
+      const metricJsonlPath = `./data/ambient-weather-heiligers-metric-jsonl/${tempFileBaseName}.jsonl`;
+
+      try {
+        if (fs.existsSync(imperialJsonlPath)) fs.unlinkSync(imperialJsonlPath);
+        if (fs.existsSync(metricJsonlPath)) fs.unlinkSync(metricJsonlPath);
+        backfillLogger.logInfo(`[${clusterName}] Cleanup complete`);
+      } catch (cleanupErr) {
+        backfillLogger.logWarning(`[${clusterName}] Cleanup failed (non-critical):`, cleanupErr.message);
+      }
+    } else if (dataSource === 'local') {
+      backfillLogger.logInfo(`[${clusterName}] Skipping cleanup (using pre-existing local files)`);
+    }
 
     return {
       status: 'success',
       cluster: clusterName,
       dataSource,
+      filesUsed: filesForIndexing.length,
       recordsFound: dataRecords.length,
       imperialIndexed: imperialResult.indexCounts.count,
       metricIndexed: metricResult.indexCounts.count,
@@ -468,10 +526,22 @@ async function performBackfill(client, clusterName, startEpoch, endEpoch) {
  */
 async function loadDataFromLocalFiles(startEpoch, endEpoch, clusterName) {
   const dataDir = './data/ambient-weather-heiligers-imperial';
+  const jsonlDirImperial = './data/ambient-weather-heiligers-imperial-jsonl';
+  const jsonlDirMetric = './data/ambient-weather-heiligers-metric-jsonl';
   const allRecords = [];
   let filesProcessed = 0;
 
   try {
+    // Ensure JSONL directories exist
+    if (!fs.existsSync(jsonlDirImperial)) {
+      fs.mkdirSync(jsonlDirImperial, { recursive: true });
+      backfillLogger.logInfo(`[${clusterName}] Created directory: ${jsonlDirImperial}`);
+    }
+    if (!fs.existsSync(jsonlDirMetric)) {
+      fs.mkdirSync(jsonlDirMetric, { recursive: true });
+      backfillLogger.logInfo(`[${clusterName}] Created directory: ${jsonlDirMetric}`);
+    }
+
     // Read all files in the imperial data directory
     const files = fs.readdirSync(dataDir);
     backfillLogger.logInfo(`[${clusterName}] Found ${files.length} files in ${dataDir}`);
@@ -480,6 +550,7 @@ async function loadDataFromLocalFiles(startEpoch, endEpoch, clusterName) {
     for (const file of files) {
       if (!file.endsWith('.json')) continue;
 
+      const fileBaseName = file.replace('.json', '');
       const filePath = `${dataDir}/${file}`;
 
       try {
@@ -489,6 +560,23 @@ async function loadDataFromLocalFiles(startEpoch, endEpoch, clusterName) {
         if (!Array.isArray(records)) {
           backfillLogger.logWarning(`[${clusterName}] Skipping ${file} - not an array`);
           continue;
+        }
+
+        // Auto-convert to JSONL formats if they don't exist
+        const imperialJsonlPath = `${jsonlDirImperial}/${fileBaseName}.jsonl`;
+        const metricJsonlPath = `${jsonlDirMetric}/${fileBaseName}.jsonl`;
+
+        if (!fs.existsSync(imperialJsonlPath)) {
+          backfillLogger.logInfo(`[${clusterName}] Converting ${file} to imperial JSONL...`);
+          const jsonlContent = records.map(r => JSON.stringify(r)).join('\n');
+          fs.writeFileSync(imperialJsonlPath, jsonlContent);
+        }
+
+        if (!fs.existsSync(metricJsonlPath)) {
+          backfillLogger.logInfo(`[${clusterName}] Converting ${file} to metric JSONL...`);
+          const metricRecords = records.map(r => convertToMetric(r));
+          const metricJsonlContent = metricRecords.map(r => JSON.stringify(r)).join('\n');
+          fs.writeFileSync(metricJsonlPath, metricJsonlContent);
         }
 
         // Filter records within the date range
