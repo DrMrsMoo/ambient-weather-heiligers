@@ -29,6 +29,93 @@ This does not work:
 Test:
 `$npm test`
 
+## Backfill Missing Data
+
+The backfill feature allows you to fill gaps in your Elasticsearch clusters by fetching missing weather data for specific date ranges.
+
+### Basic Usage
+
+```bash
+# Backfill staging cluster
+./backfill.sh --staging --from 2025-12-29 --to 2026-01-01
+
+# Backfill production cluster
+./backfill.sh --prod --from 2025-12-29 --to 2026-01-01
+
+# Backfill BOTH clusters (with independent gap detection)
+./backfill.sh --both --from 2025-12-29 --to 2026-01-01
+
+# Automated mode (skip confirmation prompts)
+./backfill.sh --staging --from 2025-12-29 --to 2026-01-01 --yes
+
+# Using npm script
+npm run backfill -- --staging --from 2025-12-29 --to 2026-01-01 --yes
+```
+
+### How It Works
+
+1. **Gap Detection**: Queries the target cluster(s) to find exact boundaries of missing data
+2. **Smart Data Sourcing**:
+   - First attempts to load data from local files in `data/ambient-weather-heiligers-imperial/`
+   - Automatically converts local files to JSONL (imperial + metric) if needed
+   - Falls back to Ambient Weather API if no local data exists
+3. **Data Processing**:
+   - Filters records to exact gap boundaries (exclusive of endpoints to avoid duplicates)
+   - Indexes both imperial and metric data to the target cluster(s)
+4. **Cleanup**: Removes temporary files after successful indexing (preserves local data)
+
+### Features
+
+- **Flexible cluster targeting** via `--prod`, `--staging`, or `--both` flags
+- **Automatic gap boundary discovery** using ES range queries
+- **Local-first approach**: uses existing files before calling API
+- **Auto-conversion**: converts raw JSON to JSONL formats as needed
+- **Rate limit bypass** for historical data fetches
+- **User confirmation** before backfilling (or `--yes` flag for automation)
+- **Independent cluster processing** when using `--both` flag
+
+### Verification & Gap Analysis Scripts
+
+Check for gaps and verify data integrity using these npm scripts:
+
+```bash
+# Check for gaps in staging cluster (last 7 days)
+npm run check-staging-gaps
+
+# Check for gaps in production cluster (last 7 days)
+npm run check-prod-gaps
+
+# Verify backfill operation succeeded
+npm run verify-backfill
+
+# Compare data between production and staging
+npm run compare-clusters
+
+# Analyze data distribution
+npm run analyze-data
+```
+
+For full script documentation, see [scripts/README.md](scripts/README.md).
+
+### Copying Data Between Clusters
+
+If production has data that staging is missing (e.g., from a failed cron job):
+
+```bash
+# Copy missing data from production to staging
+npm run copy-prod-to-staging
+```
+
+**Note:** Edit the script to change date ranges before running.
+
+### Important Notes
+
+- Backfill operates on **past data** and bypasses normal rate limiting
+- The Ambient Weather API counts **backwards in time** - backfill handles this automatically
+- Local files are **preserved** (not deleted) for audit trail
+- When using `--both`, each cluster gets independent gap detection
+- Boundary filtering uses strict inequality (`>` and `<`) to prevent duplicate indexing
+
 ### Where the code lives:
  - runFetchNewData.js (class)
  - runConvertImperialToJsonl.js

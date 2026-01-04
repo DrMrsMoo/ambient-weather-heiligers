@@ -7,7 +7,17 @@
     "test": "./node_modules/.bin/jest",
     "start": "source .env && node runFetchRawData.js && node runConvertImperialToJsonl.js && node runConvertImperialToMetric.js",
     "run_main": "source .env && node runMainIIFE.js",
-    "backfill": "source .env && node runBackfill.js"
+    "backfill": "source .env && node runBackfill.js",
+    "verify-backfill": "source .env && node scripts/verify-backfill.js",
+    "check-staging-gaps": "source .env && node scripts/check-recent-gaps.js",
+    "check-prod-gaps": "source .env && node scripts/check-production-gaps.js",
+    "compare-clusters": "source .env && node scripts/compare-clusters.js",
+    "copy-prod-to-staging": "source .env && node scripts/copy-prod-to-staging.js",
+    "analyze-data": "source .env && node scripts/analyze-data.js",
+    "check-duplicates": "source .env && node scripts/check-duplicates.js",
+    "check-gap-details": "source .env && node scripts/check-gap-details.js",
+    "verify-indexing": "source .env && node scripts/verify-indexing.js",
+    "manual-index": "source .env && node scripts/manual-index.js"
   },
   "author": "Tina Heiligers",
   "license": "MIT",
