@@ -5,8 +5,8 @@ const { createEsClient } = require('../dataIndexers/esClient');
 const { searchDocsByDateRange } = require('../dataIndexers/esClientMethods');
 const IndexData = require('../dataIndexers');
 const FetchRawData = require('../dataFetchers');
-const { ConvertImperialToJsonl, ConvertImperialToMetric } = require('../converters');
 const { prepareDataForBulkIndexing } = require('../../main_utils');
+const { convertToMetric } = require('../utils');
 const readlineSync = require('readline-sync');
 const moment = require('moment-timezone');
 
@@ -342,51 +342,80 @@ function confirmBackfill(boundaries, clusterName, skipConfirmation = false, cont
  */
 async function performBackfill(client, clusterName, startEpoch, endEpoch) {
   try {
-    // Initialize components (following main.js pattern)
-    const awApi = new AmbientWeatherApi({
-      apiKey: process.env.AMBIENT_WEATHER_API_KEY,
-      applicationKey: process.env.AMBIENT_WEATHER_APPLICATION_KEY
-    });
-
-    const fetcher = new FetchRawData(awApi, fs);
-    const imperialToJsonlConverter = new ConvertImperialToJsonl(fs);
-    const imperialToMetricJsonlConverter = new ConvertImperialToMetric(fs);
     const indexer = new IndexData(client);
+    let dataRecords = [];
+    let dataSource = 'unknown';
 
-    // Step 1: Fetch data from Ambient Weather API
-    backfillLogger.logInfo(`[${clusterName}] Fetching data from Ambient Weather API...`);
-    // Note: API counts backwards in time, so use endEpoch as the 'from' parameter
-    const fetchResult = await fetcher.getDataForDateRanges(false, endEpoch);
+    // Step 1: Try to load data from existing local files first
+    backfillLogger.logInfo(`[${clusterName}] Reading existing data files for date range...`);
+    const { dataRecords: localRecords, filesProcessed } = await loadDataFromLocalFiles(startEpoch, endEpoch, clusterName);
 
-    if (fetchResult === 'too early') {
-      backfillLogger.logWarning(`[${clusterName}] API returned "too early" - less than 5 minutes since last fetch`);
-      return { status: 'skipped', message: 'Too early to fetch data (less than 5 minutes since last fetch)' };
+    if (localRecords.length > 0) {
+      backfillLogger.logInfo(`[${clusterName}] Loaded ${localRecords.length} records from ${filesProcessed} local files`);
+      dataRecords = localRecords;
+      dataSource = 'local';
+    } else {
+      // Step 1b: No local data found, try fetching from API
+      backfillLogger.logInfo(`[${clusterName}] No data found in local files for specified range`);
+      backfillLogger.logInfo(`[${clusterName}] Attempting to fetch data from Ambient Weather API...`);
+
+      const awApi = new AmbientWeatherApi({
+        apiKey: process.env.AMBIENT_WEATHER_API_KEY,
+        applicationKey: process.env.AMBIENT_WEATHER_APPLICATION_KEY
+      });
+      const fetcher = new FetchRawData(awApi, fs);
+
+      // Note: API counts backwards in time, so use endEpoch as the 'from' parameter
+      // bypassRateLimit=true because backfill operates on past data and shouldn't be blocked by rate limiter
+      const fetchResult = await fetcher.getDataForDateRanges(true, endEpoch, true); // skipSave=true, fromDate=endEpoch, bypassRateLimit=true
+
+      if (fetchResult === 'too early') {
+        backfillLogger.logWarning(`[${clusterName}] API returned "too early" - less than 5 minutes since last fetch`);
+        return { status: 'skipped', message: 'Too early to fetch data (less than 5 minutes since last fetch)' };
+      }
+
+      if (!fetchResult || typeof fetchResult !== 'object' || !Array.isArray(fetchResult.dataFetchForDates)) {
+        backfillLogger.logError(`[${clusterName}] Invalid fetch result from API`);
+        return { status: 'error', error: 'Invalid data fetch result from API' };
+      }
+
+      const { dataFetchForDates } = fetchResult;
+
+      if (dataFetchForDates.length === 0) {
+        backfillLogger.logWarning(`[${clusterName}] No data returned from API for specified range`);
+        return { status: 'skipped', message: 'No data available in API for specified range' };
+      }
+
+      // Flatten the fetched data and filter to our date range
+      // Use < for endEpoch because endEpoch is the "first document after gap" which is already in the cluster
+      dataRecords = dataFetchForDates.flat().filter(record => {
+        const recordTime = record.dateutc;
+        return recordTime > startEpoch && recordTime < endEpoch;
+      });
+
+      backfillLogger.logInfo(`[${clusterName}] Fetched ${dataRecords.length} records from API`);
+      dataSource = 'api';
     }
 
-    // Validate fetchResult structure before destructuring
-    if (!fetchResult || typeof fetchResult !== 'object') {
-      backfillLogger.logError(`[${clusterName}] Invalid fetch result:`, fetchResult);
-      return { status: 'error', error: 'Invalid data fetch result' };
+    if (dataRecords.length === 0) {
+      backfillLogger.logWarning(`[${clusterName}] No data available for specified range`);
+      return { status: 'skipped', message: 'No data available for specified range' };
     }
 
-    const { dataFetchForDates, dataFileNames } = fetchResult;
+    // Step 2: Write filtered data directly as JSONL (skip JSON -> JSONL conversion)
+    const tempFileBaseName = `backfill_${startEpoch}_${endEpoch}`;
+    const imperialJsonlPath = `./data/ambient-weather-heiligers-imperial-jsonl/${tempFileBaseName}.jsonl`;
+    const metricJsonlPath = `./data/ambient-weather-heiligers-metric-jsonl/${tempFileBaseName}.jsonl`;
 
-    if (!Array.isArray(dataFetchForDates) || dataFetchForDates.length === 0) {
-      backfillLogger.logWarning(`[${clusterName}] No data fetched from API`);
-      return { status: 'skipped', message: 'No data available in specified range' };
-    }
+    backfillLogger.logInfo(`[${clusterName}] Writing ${dataRecords.length} imperial records to JSONL...`);
+    const imperialJsonlContent = dataRecords.map(record => JSON.stringify(record)).join('\n');
+    fs.writeFileSync(imperialJsonlPath, imperialJsonlContent);
 
-    backfillLogger.logInfo(`[${clusterName}] Fetched ${dataFetchForDates.length} data batches`);
-
-    // Step 2: Convert to JSONL
-    backfillLogger.logInfo(`[${clusterName}] Converting to JSONL...`);
-    const imperialJSONLFileNames = imperialToJsonlConverter.convertRawImperialDataToJsonl();
-    backfillLogger.logInfo(`[${clusterName}] Converted ${imperialJSONLFileNames.length} imperial files to JSONL`);
-
-    // Step 3: Convert to metric
-    backfillLogger.logInfo(`[${clusterName}] Converting to metric...`);
-    const metricJSONLFileNames = imperialToMetricJsonlConverter.convertImperialDataToMetricJsonl();
-    backfillLogger.logInfo(`[${clusterName}] Converted ${metricJSONLFileNames.length} metric files to JSONL`);
+    // Step 3: Convert imperial to metric and write metric JSONL
+    backfillLogger.logInfo(`[${clusterName}] Converting ${dataRecords.length} records to metric and writing JSONL...`);
+    const metricRecords = dataRecords.map(record => convertToMetric(record));
+    const metricJsonlContent = metricRecords.map(record => JSON.stringify(record)).join('\n');
+    fs.writeFileSync(metricJsonlPath, metricJsonlContent);
 
     // Step 4: Initialize indexer
     backfillLogger.logInfo(`[${clusterName}] Initializing indexer...`);
@@ -398,20 +427,26 @@ async function performBackfill(client, clusterName, startEpoch, endEpoch) {
 
     // Step 5: Index imperial data
     backfillLogger.logInfo(`[${clusterName}] Indexing imperial data...`);
-    const imperialPayload = prepareDataForBulkIndexing(dataFileNames, 'imperial', backfillLogger);
+    const imperialPayload = prepareDataForBulkIndexing([tempFileBaseName], 'imperial', backfillLogger);
     const imperialResult = await indexer.bulkIndexDocuments(imperialPayload, 'imperial');
     backfillLogger.logInfo(`[${clusterName}] Imperial indexing complete. Total docs: ${imperialResult.indexCounts.count}`);
 
     // Step 6: Index metric data
     backfillLogger.logInfo(`[${clusterName}] Indexing metric data...`);
-    const metricPayload = prepareDataForBulkIndexing(dataFileNames, 'metric', backfillLogger);
+    const metricPayload = prepareDataForBulkIndexing([tempFileBaseName], 'metric', backfillLogger);
     const metricResult = await indexer.bulkIndexDocuments(metricPayload, 'metric');
     backfillLogger.logInfo(`[${clusterName}] Metric indexing complete. Total docs: ${metricResult.indexCounts.count}`);
+
+    // Step 7: Clean up temporary files
+    backfillLogger.logInfo(`[${clusterName}] Cleaning up temporary files...`);
+    if (fs.existsSync(imperialJsonlPath)) fs.unlinkSync(imperialJsonlPath);
+    if (fs.existsSync(metricJsonlPath)) fs.unlinkSync(metricJsonlPath);
 
     return {
       status: 'success',
       cluster: clusterName,
-      dataFetched: dataFetchForDates.length,
+      dataSource,
+      recordsFound: dataRecords.length,
       imperialIndexed: imperialResult.indexCounts.count,
       metricIndexed: metricResult.indexCounts.count,
       imperialErrors: imperialResult.erroredDocuments.length,
@@ -421,6 +456,70 @@ async function performBackfill(client, clusterName, startEpoch, endEpoch) {
   } catch (err) {
     backfillLogger.logError(`[${clusterName}] [performBackfill] Error:`, err);
     return { status: 'error', cluster: clusterName, error: err.message };
+  }
+}
+
+/**
+ * Load data from existing local files within the specified date range
+ * @param {number} startEpoch - Start epoch ms
+ * @param {number} endEpoch - End epoch ms
+ * @param {string} clusterName - Cluster name for logging
+ * @returns {object} - { dataRecords: Array, filesProcessed: number }
+ */
+async function loadDataFromLocalFiles(startEpoch, endEpoch, clusterName) {
+  const dataDir = './data/ambient-weather-heiligers-imperial';
+  const allRecords = [];
+  let filesProcessed = 0;
+
+  try {
+    // Read all files in the imperial data directory
+    const files = fs.readdirSync(dataDir);
+    backfillLogger.logInfo(`[${clusterName}] Found ${files.length} files in ${dataDir}`);
+
+    // Process each JSON file
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue;
+
+      const filePath = `${dataDir}/${file}`;
+
+      try {
+        const fileContent = fs.readFileSync(filePath, 'utf8');
+        const records = JSON.parse(fileContent);
+
+        if (!Array.isArray(records)) {
+          backfillLogger.logWarning(`[${clusterName}] Skipping ${file} - not an array`);
+          continue;
+        }
+
+        // Filter records within the date range
+        // Use < for endEpoch because endEpoch is the "first document after gap" which is already in the cluster
+        const filteredRecords = records.filter(record => {
+          const recordTime = record.dateutc;
+          return recordTime > startEpoch && recordTime < endEpoch;
+        });
+
+        if (filteredRecords.length > 0) {
+          backfillLogger.logInfo(`[${clusterName}] Found ${filteredRecords.length} records in ${file}`);
+          allRecords.push(...filteredRecords);
+          filesProcessed++;
+        }
+
+      } catch (err) {
+        backfillLogger.logWarning(`[${clusterName}] Error reading ${file}:`, err.message);
+      }
+    }
+
+    // Sort records by dateutc (ascending)
+    allRecords.sort((a, b) => a.dateutc - b.dateutc);
+
+    return {
+      dataRecords: allRecords,
+      filesProcessed
+    };
+
+  } catch (err) {
+    backfillLogger.logError(`[${clusterName}] Error loading local files:`, err);
+    return { dataRecords: [], filesProcessed: 0 };
   }
 }
 

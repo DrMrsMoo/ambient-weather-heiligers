@@ -201,17 +201,18 @@ class FetchRawData {
    * main method for FetchRawData class: fetches data that we don't yet have on file up to fromDate
    * @param {boolean} skipSave: saving to file is skipped if true
    * @param {integer} fromDate: date until which to fetch new data for (calls are made going back in time)
+   * @param {boolean} bypassRateLimit: skip the rate limit check (useful for backfill operations)
    * @returns {obj | string} { dataFetchForDates: <array>, dataFileNames: <array } | "too early" if less than 5 min has passed between the current time and the most recent datetime on file
    array of date-times in milliseconds since epoch, array of filenames where the data was/would have been stored
    */
   // main function for this class
-  async getDataForDateRanges(skipSave = true, fromDate) {
+  async getDataForDateRanges(skipSave = true, fromDate, bypassRateLimit = false) {
 
     if (!fromDate) {
       fromDate = this.now;
       console.log('setting fromDate to now')
     }
-    fetchRawDataLogger.logInfo('[getDataForDateRanges] args: skipSave, fromDate', { skipSave: !!skipSave, fromDate: fromDate });
+    fetchRawDataLogger.logInfo('[getDataForDateRanges] args: skipSave, fromDate, bypassRateLimit', { skipSave: !!skipSave, fromDate: fromDate, bypassRateLimit: !!bypassRateLimit });
 
     this.skipSave = skipSave;
     // this is all setup before I can start fetching the data
@@ -219,13 +220,27 @@ class FetchRawData {
     // set the unique dates entry set to the class instance
     this.allUniqueDates = this.extractUniqueDatesFromFiles(this.pathToFiles);
     const dateOfLastDataSaved = this.getLastRecordedUTCDate();
-    const minSinceLastData = Math.floor((fromDate - dateOfLastDataSaved) / (timeConstants.milliseconds_per_second * timeConstants.seconds_per_minute));
-    // return early if it's too soon to fetch new data
-    if (minSinceLastData < AW_CONSTANTS.dataInterval) {
-      fetchRawDataLogger.logInfo('[getDataForDateRanges] too early', { minSinceLastData: minSinceLastData, minInterval: AW_CONSTANTS.dataInterval })
-      return 'too early';
+
+    let minSinceLastData, estTotalNumRecordsToFetch;
+
+    if (bypassRateLimit) {
+      // For backfill: fromDate is in the past, so calculate backwards from fromDate to the API limit
+      // Ambient Weather API allows fetching up to 288 records (24 hours) at once
+      // We'll fetch as much as we can in one request
+      minSinceLastData = AW_CONSTANTS.maxNumRecords * AW_CONSTANTS.dataInterval; // Assume max records for backfill
+      estTotalNumRecordsToFetch = AW_CONSTANTS.maxNumRecords;
+      fetchRawDataLogger.logInfo('[getDataForDateRanges] bypass rate limit for backfill', { estTotalNumRecordsToFetch });
+    } else {
+      // Normal forward-time operation
+      minSinceLastData = Math.floor((fromDate - dateOfLastDataSaved) / (timeConstants.milliseconds_per_second * timeConstants.seconds_per_minute));
+      // return early if it's too soon to fetch new data
+      if (minSinceLastData < AW_CONSTANTS.dataInterval) {
+        fetchRawDataLogger.logInfo('[getDataForDateRanges] too early', { minSinceLastData: minSinceLastData, minInterval: AW_CONSTANTS.dataInterval })
+        return 'too early';
+      }
+      estTotalNumRecordsToFetch = Math.floor(minSinceLastData / AW_CONSTANTS.dataInterval);
     }
-    const estTotalNumRecordsToFetch = Math.floor(minSinceLastData / AW_CONSTANTS.dataInterval);
+
     const estNumberOfBatches = estTotalNumRecordsToFetch / AW_CONSTANTS.maxNumRecords;
     // multi-day data fetch
 

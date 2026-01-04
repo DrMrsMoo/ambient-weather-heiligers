@@ -5,9 +5,9 @@
   "main": "main.js",
   "scripts": {
     "test": "./node_modules/.bin/jest",
-    "start": "node runFetchRawData.js && node runConvertImperialToJsonl.js && node runConvertImperialToMetric.js",
-    "run_main": "node runMainIIFE.js",
-    "backfill": "node runBackfill.js"
+    "start": "source .env && node runFetchRawData.js && node runConvertImperialToJsonl.js && node runConvertImperialToMetric.js",
+    "run_main": "source .env && node runMainIIFE.js",
+    "backfill": "source .env && node runBackfill.js"
   },
   "author": "Tina Heiligers",
   "license": "MIT",
