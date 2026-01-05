@@ -4,7 +4,39 @@
 
 This guide provides step-by-step instructions for safely deploying changes to production.
 
-**Key Principle:** Production runs from the `production-current` git tag, not from the `main` branch. You can freely merge to `main` without affecting production.
+**Key Principle:** Production runs from the `production-current` git tag pointing to the `deployment` branch. You can freely develop in `main` and other branches without affecting production.
+
+---
+
+## Branch Structure
+
+This project uses a three-branch workflow:
+
+### Branches
+- **`main`** - Active development branch
+  - Merge feature branches here
+  - PRs target this branch
+  - Safe to experiment and iterate
+
+- **`deployment`** - Stable deployment branch
+  - Contains production-ready code
+  - Only receives tested changes from main
+  - `production-current` tag points here
+  - Cron jobs run from this branch via the tag
+
+- **`feature/*`, `fix/*`, etc.** - Development branches
+  - Created from main
+  - Merged back to main via PR
+
+### Tags
+- **`production-current`** - Points to the stable commit on `deployment` branch
+  - Cron job always checks out this tag
+  - Moving this tag triggers deployment on next cron run (5:20 AM/PM)
+
+### Workflow Summary
+```
+feature/* → main → deployment → production-current tag → cron execution
+```
 
 ---
 
@@ -12,8 +44,9 @@ This guide provides step-by-step instructions for safely deploying changes to pr
 
 ### Current State
 - **Production Directory:** `/Users/tina/Projects/ambient-weather-heiligers`
-- **Production Protection:** `production-current` git tag
+- **Production Protection:** `production-current` git tag → `deployment` branch
 - **Development Branch:** `main` (safe to merge to)
+- **Deployment Branch:** `deployment` (stable, production-ready code)
 - **Latest Production Release:** Run `git describe --tags production-current`
 - **Cron Schedule:** 5:20 AM & 5:20 PM daily
 - **Cron Log:** `logs/cron.log`
@@ -110,19 +143,48 @@ git push origin --delete feature/your-feature-name
 ### When to Deploy
 
 Deploy when you have:
-- ✅ One or more merged PRs ready for production
+- ✅ One or more merged PRs in `main` ready for production
 - ✅ All tests passing
 - ✅ Changes tested locally
 - ✅ CHANGELOG.md updated (optional but recommended)
 
 **You control when deployment happens** - it's not automatic.
 
-### Option 1: Using the Deployment Script (Recommended)
-
-The `deploy-to-production.sh` script handles everything safely:
+### Recommended Workflow
 
 ```bash
-# Deploy latest main to production
+# Step 1: Merge main into deployment branch
+git checkout deployment
+git pull origin deployment
+git merge origin/main
+
+# Step 2: Test the deployment branch
+source .env
+node runMainIIFE.js
+# Watch for success messages from both clusters
+
+# Step 3: If tests pass, push deployment branch
+git push origin deployment
+
+# Step 4: Move production-current tag to deployment
+git tag -f production-current deployment
+git push origin production-current --force
+
+# Step 5: Return to main
+git checkout main
+```
+
+**Next cron run (5:20 AM or 5:20 PM) will use the new version.**
+
+### Alternative: Using deploy-to-production.sh Script
+
+The `deploy-to-production.sh` script automates testing and tag movement:
+
+```bash
+# Deploy latest deployment branch
+./deploy-to-production.sh deployment
+
+# OR deploy main directly (merges to deployment first)
 ./deploy-to-production.sh main
 
 # OR deploy a specific tag
@@ -138,25 +200,14 @@ The `deploy-to-production.sh` script handles everything safely:
 6. Pushes tag to remote
 7. Returns to `main` branch
 
-**Next cron run (5:20 AM or 5:20 PM) will use the new version.**
+### Quick Deployment (If deployment branch is up-to-date)
 
-### Option 2: Manual Deployment
-
-If you prefer to do it manually:
+If `deployment` already has the changes you want:
 
 ```bash
-# Step 1: Test the version you want to deploy
-git checkout main  # or specific tag
-source .env
-node runMainIIFE.js
-# Watch for success messages
-
-# Step 2: If test succeeds, move production tag
-git tag -f production-current main  # or specific commit/tag
+# Just move the tag and push
+git tag -f production-current deployment
 git push origin production-current --force
-
-# Step 3: Return to main
-git checkout main
 ```
 
 ### Option 3: Create Named Release Then Deploy
@@ -456,9 +507,90 @@ git push origin production-current
 
 | Branch | Purpose | Safe to Force-Push? |
 |--------|---------|---------------------|
+| `deployment` | Stable production code | NO - merge from main |
 | `main` | Development integration | NO - use PRs |
 | `feature/*` | Isolated work | YES - your branch |
 | `pi-master` | Legacy (unused) | NO - kept for history |
+
+---
+
+## Troubleshooting
+
+### Cron Job Not Running
+
+**Symptom:** Cron job scheduled but no new data appearing in clusters
+
+**Common Causes:**
+
+1. **Wrong script path in crontab**
+   ```bash
+   # Check current crontab
+   crontab -l
+
+   # Should see:
+   # 20 5,17 * * * /Users/tina/Projects/ambient-weather-heiligers/fetchAndIndex-production.sh
+
+   # If script doesn't exist, update crontab:
+   echo "20 5,17 * * * /Users/tina/Projects/ambient-weather-heiligers/fetchAndIndex-production.sh" | crontab -
+   ```
+
+2. **production-current tag missing or pointing to wrong commit**
+   ```bash
+   # Check tag exists
+   git tag -l production-current
+
+   # Check what it points to
+   git describe --tags production-current
+   git show production-current --no-patch
+
+   # If missing, recreate:
+   git tag production-current deployment
+   git push origin production-current
+   ```
+
+3. **Script not executable**
+   ```bash
+   chmod +x /Users/tina/Projects/ambient-weather-heiligers/fetchAndIndex-production.sh
+   ```
+
+4. **Environment variables not loading**
+   ```bash
+   # Test script manually
+   /Users/tina/Projects/ambient-weather-heiligers/fetchAndIndex-production.sh
+
+   # Check logs for errors
+   tail -50 logs/cron.log
+   ```
+
+### Historical Issue (Jan 5, 2026)
+
+**What happened:** Cron job configured to run `fetchAndIndex-production.sh` but the file only existed on the `feature/reorganize-root-directory` branch, not on `main`. The script silently failed.
+
+**Fix applied:**
+1. Renamed `feature/reorganize-root-directory` → `deployment` branch
+2. Pushed `deployment` branch to origin
+3. Updated `production-current` tag to point to `deployment` branch
+4. Verified crontab uses correct script path
+5. Tested script execution successfully
+
+**Lesson:** Always verify deployment scripts exist on the branch that cron will execute from.
+
+### Cron Not Executing At All
+
+```bash
+# Check cron is running on macOS
+sudo launchctl list | grep cron
+
+# Check cron permissions (macOS may require Full Disk Access)
+# System Preferences → Security & Privacy → Privacy → Full Disk Access
+# Add Terminal or iTerm2
+
+# Test cron with a simple entry first
+echo "* * * * * date >> /tmp/crontest.log" | crontab -
+# Wait 1 minute
+cat /tmp/crontest.log
+# If it works, restore original crontab
+```
 
 ---
 

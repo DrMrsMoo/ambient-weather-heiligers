@@ -1,3 +1,45 @@
-Temp cronjobs for pi maintenance
-5:20 am & 5:20 pm
-logs: tail -f /Users/tina/Projects/ambient-weather-heiligers/logs/cron.log
+# Cron Job Configuration - Mac Production Environment
+# Last updated: January 5, 2026
+
+## Current Crontab Entry
+20 5,17 * * * /Users/tina/Projects/ambient-weather-heiligers/fetchAndIndex-production.sh
+
+## Schedule
+- Runs at 5:20 AM and 5:20 PM daily
+- Indexes data to both PRODUCTION and STAGING Elasticsearch clusters
+
+## How It Works
+1. Cron executes fetchAndIndex-production.sh
+2. Script checks out production-current git tag (detached HEAD)
+3. Runs: source .env && node runMainIIFE.js
+4. Data fetched from Ambient Weather API
+5. Data indexed to both clusters in parallel
+6. Script returns to main branch
+7. Output logged to logs/cron.log
+
+## Monitoring
+# View live logs (tail during cron run):
+tail -f /Users/tina/Projects/ambient-weather-heiligers/logs/cron.log
+
+# Check recent runs:
+tail -100 /Users/tina/Projects/ambient-weather-heiligers/logs/cron.log
+
+# Check for errors:
+tail -200 /Users/tina/Projects/ambient-weather-heiligers/logs/cron.log | grep -i error
+
+## Deployment
+Production always runs from the production-current tag, which points to the deployment branch.
+To deploy new code, see docs/DEPLOYMENT.md
+
+## Quick Commands
+# View current crontab:
+crontab -l
+
+# Edit crontab:
+crontab -e
+
+# Test script manually:
+/Users/tina/Projects/ambient-weather-heiligers/fetchAndIndex-production.sh
+
+# Check what production-current points to:
+cd /Users/tina/Projects/ambient-weather-heiligers && git describe --tags production-current

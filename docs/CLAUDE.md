@@ -55,16 +55,25 @@ git checkout -b feature/descriptive-name
 - `docs/` - Documentation updates
 - `test/` - Test additions or updates
 
+### Branch Structure
+- **`main`** - Active development branch (merge PRs here)
+- **`deployment`** - Stable production branch (receives tested changes from main)
+- **`production-current` tag** - Points to `deployment` branch (cron runs from this tag)
+
 ### Git Workflow
 1. Create feature branch from `main`
 2. Make changes and commit often with clear messages
 3. Push branch to origin: `git push -u origin feature/branch-name`
 4. Create PR against `main` branch: `gh pr create --repo DrMrsMoo/ambient-weather-heiligers`
 5. After PR approval, **merge to main freely** - production is protected!
-6. (Optional) Create named release tag: `git tag -a v1.1.0 -m "Description"`
-7. Deploy when ready: `./deploy-to-production.sh main`
+6. When ready to deploy, merge `main` → `deployment` and move tag (see DEPLOYMENT.md)
 
-**PRODUCTION PROTECTION:** Production runs from the `production-current` git tag, NOT from `main`. The cron job (5:20 AM/PM) always checks out this tag. You can merge to `main` without affecting production - deployment only happens when you explicitly move the tag using the deployment script.
+**PRODUCTION PROTECTION:** Production runs from the `production-current` git tag pointing to the `deployment` branch. The cron job (5:20 AM/PM) always checks out this tag. You can merge to `main` without affecting production - deployment only happens when you explicitly merge to `deployment` and move the tag.
+
+**Deployment Workflow:**
+```
+feature/* → main → deployment → production-current tag → cron execution
+```
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment procedures and [REFACTOR_PLAN.md](REFACTOR_PLAN.md) for modernization roadmap.
 
@@ -234,31 +243,36 @@ node runMainIIFE.js
 
 ### Current Setup
 - **Location:** `/Users/tina/Projects/ambient-weather-heiligers`
-- **Protection:** `production-current` git tag
+- **Stable Branch:** `deployment` (production-ready code)
+- **Production Tag:** `production-current` → points to `deployment` branch
 - **Cron Schedule:** 5:20 AM & 5:20 PM daily
-- **Cron Script:** `fetchAndIndex-production.sh` (checks out production tag)
+- **Cron Script:** `fetchAndIndex-production.sh` (checks out production-current tag)
 
 ### How It Works
 
-The cron job **always** runs from the `production-current` tag, never from `main`. This means:
+The cron job **always** runs from the `production-current` tag pointing to the `deployment` branch. This means:
 - ✅ You can freely merge PRs to `main` without affecting production
-- ✅ Deployment only happens when you explicitly move the tag
+- ✅ Deployment only happens when you merge `main` → `deployment` and move the tag
 - ✅ Rollback is instant (just move the tag back)
 
 ### Deploying Changes
 
 ```bash
-# After merging PRs to main, deploy using the script:
-./deploy-to-production.sh main
+# Step 1: Merge main into deployment branch
+git checkout deployment
+git pull origin deployment
+git merge origin/main
 
-# Or deploy a specific tag:
-./deploy-to-production.sh v1.2.0
+# Step 2: Test the deployment
+source .env
+node runMainIIFE.js
 
-# The script will:
-# 1. Show you what's changing
-# 2. Test the version
-# 3. Ask for confirmation
-# 4. Move production-current tag if test passes
+# Step 3: If tests pass, deploy
+git push origin deployment
+git tag -f production-current deployment
+git push origin production-current --force
+git checkout main
+
 # Next cron run (5:20 AM/PM) will use the new version
 ```
 
