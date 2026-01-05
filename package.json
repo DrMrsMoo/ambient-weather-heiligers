@@ -5,8 +5,19 @@
   "main": "main.js",
   "scripts": {
     "test": "./node_modules/.bin/jest",
-    "start": "node runFetchRawData.js && node runConvertImperialToJsonl.js && node runConvertImperialToMetric.js",
-    "run_main": "node runMainIIFE.js"
+    "start": "source .env && node runFetchRawData.js && node runConvertImperialToJsonl.js && node runConvertImperialToMetric.js",
+    "run_main": "source .env && node runMainIIFE.js",
+    "backfill": "source .env && node runBackfill.js",
+    "verify-backfill": "source .env && node scripts/verify-backfill.js",
+    "check-staging-gaps": "source .env && node scripts/check-recent-gaps.js",
+    "check-prod-gaps": "source .env && node scripts/check-production-gaps.js",
+    "compare-clusters": "source .env && node scripts/compare-clusters.js",
+    "copy-prod-to-staging": "source .env && node scripts/copy-prod-to-staging.js",
+    "analyze-data": "source .env && node scripts/analyze-data.js",
+    "check-duplicates": "source .env && node scripts/check-duplicates.js",
+    "check-gap-details": "source .env && node scripts/check-gap-details.js",
+    "verify-indexing": "source .env && node scripts/verify-indexing.js",
+    "manual-index": "source .env && node scripts/manual-index.js"
   },
   "author": "Tina Heiligers",
   "license": "MIT",
@@ -17,7 +28,9 @@
     "convert-units": "^2.3.4",
     "file-system": "^2.2.2",
     "moment": "^2.26.0",
-    "moment-timezone": "^0.5.31"
+    "moment-timezone": "^0.5.31",
+    "readline-sync": "^1.4.10",
+    "yargs": "^17.7.2"
   },
   "devDependencies": {
     "@elastic/elasticsearch-mock": "^0.3.1",

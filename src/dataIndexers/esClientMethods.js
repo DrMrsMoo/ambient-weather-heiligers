@@ -74,7 +74,7 @@ async function getAmbientWeatherAliases(client = require('./esClient')) {
   let clusterAliasesResult;
   let error;
   try {
-    const { body, statusCode, headers, meta } = await client.cat.aliases({
+    const { body, statusCode } = await client.cat.aliases({
       name: '*ambient-weather-heiligers-*',
       format: 'json',
       h: ['alias', 'index', 'is_write_index'],
@@ -180,7 +180,7 @@ async function getMostRecentDoc(client = require('./esClient'), indexName, opts)
 
   let searchResultBody;
   try {
-    const { body, headers, statusCode, meta } = await client.search({
+    const { body } = await client.search({
       ...searchConfig,
       index: indexName,
       body: {
@@ -196,6 +196,47 @@ async function getMostRecentDoc(client = require('./esClient'), indexName, opts)
   }
   return searchResultBody;
   //implement me using esClient.search with decending order and retrieving only 1 doc.
+}
+
+/**
+ * Search for documents within a date range
+ * @param {Class} client configured elasticsearch client
+ * @param {string} indexName index to search
+ * @param {number} startDate start date in epoch milliseconds
+ * @param {number} endDate end date in epoch milliseconds
+ * @param {object} opts optional search configuration
+ * @returns {array} search hits matching the date range
+ */
+async function searchDocsByDateRange(client = require('./esClient'), indexName, startDate, endDate, opts = {}) {
+  const searchConfig = {
+    expand_wildcards: opts.expandWildcards ?? 'all',
+    sort: opts.sort ?? ["dateutc:asc"],
+    size: opts.size || 1,
+    _source: opts._source ?? ['date', 'dateutc', '@timestamp']
+  };
+
+  let searchResultBody;
+  try {
+    const { body } = await client.search({
+      ...searchConfig,
+      index: indexName,
+      body: {
+        query: {
+          range: {
+            dateutc: {
+              gte: startDate,
+              lte: endDate
+            }
+          }
+        }
+      }
+    });
+    searchResultBody = body.hits.hits;
+    esClientLogger.logInfo('[searchDocsByDateRange] found', searchResultBody.length, 'documents');
+  } catch (err) {
+    esClientLogger.logError('[searchDocsByDateRange] search request error:', err);
+  }
+  return searchResultBody;
 }
 /**
  *
@@ -270,6 +311,6 @@ const clientMethods = {
 // }
 // clientMethods.createIndex(require('./esClient'), 'tweets', testMappings)
 // clientMethods.deleteIndex(require('./esClient'), 'tweets')
-module.exports = { pingCluster, getAmbientWeatherAliases, createIndex, getMostRecentDoc, deleteIndex, bulkIndexDocuments };
+module.exports = { pingCluster, getAmbientWeatherAliases, createIndex, getMostRecentDoc, searchDocsByDateRange, deleteIndex, bulkIndexDocuments };
 
 

@@ -19,6 +19,19 @@ This file serves as the primary source of truth for AI assistants (Claude, Copil
 
 ## Development Workflow
 
+### CRITICAL: Remote Repository and Base Branch
+
+**Primary Remote:** `DrMrsMoo/ambient-weather-heiligers` (origin)
+**Base Branch:** `main`
+
+All work is done against the DrMrsMoo fork. The upstream TinaHeiligers repository is not used for development.
+
+```bash
+# Verify your remote configuration:
+git remote -v
+# origin should point to: git@github.com:DrMrsMoo/ambient-weather-heiligers.git
+```
+
 ### CRITICAL: Always Create a New Branch
 
 **NEVER commit directly to `main` or `master`.** Always create a new feature branch for any code work.
@@ -44,10 +57,10 @@ git checkout -b feature/descriptive-name
 
 ### Git Workflow
 1. Create feature branch from `main`
-2. Make changes and commit with clear messages
-3. Push branch to origin
-4. Merge to main (locally or via PR)
-5. Push updated main to origin
+2. Make changes and commit often with clear messages
+3. Push branch to origin: `git push -u origin feature/branch-name`
+4. Create PR against `main` branch: `gh pr create --repo DrMrsMoo/ambient-weather-heiligers`
+5. After PR approval, merge to main
 6. Deploy to Raspberry Pi
 
 ---
