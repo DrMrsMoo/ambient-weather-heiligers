@@ -2,6 +2,14 @@
 Use at your own risk!
 This project is in progress and by no means do I declare it to be 'prod-ready'.
 
+## Documentation
+
+**For complete documentation, see the [docs/](docs/) folder:**
+- [CLAUDE.md](docs/CLAUDE.md) - Project constitution and development guide
+- [DEPLOYMENT.md](docs/DEPLOYMENT.md) - Deployment procedures and production safety
+- [REFACTOR_PLAN.md](docs/REFACTOR_PLAN.md) - Modernization roadmap
+- [CHANGELOG.md](docs/CHANGELOG.md) - Release history
+
 ## Ambient Weather Heiligers (weather station data)
 The data is will be indexed into ambient_weather_heiligers_imperial and ambient_weather_heiligers_metric indices with index patterns of the same name. The templates and aliases are versioned in the config folder.
 The data comes from my own weather station, mounted on my patio roof, just outside my office.
@@ -15,16 +23,16 @@ Install:
 
 To fetch and convert data:
 1. Fetch new data:
-`$node runFetchRawData.js`
+`$node bin/runFetchRawData.js`
 
 2. Convert imperial data to jsonl:
-`$node runConvertImperialToJsonl.js`
+`$node bin/runConvertImperialToJsonl.js`
 
 3. Handle metric and json -> jsonl conversion
-`$node runConvertImperialToMetric.js`
+`$node bin/runConvertImperialToMetric.js`
 
-This does not work:
-`$npm start` or `$ ./fetchdata.sh`
+Or use npm scripts:
+`$npm start`
 
 Test:
 `$npm test`

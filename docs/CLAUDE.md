@@ -60,8 +60,13 @@ git checkout -b feature/descriptive-name
 2. Make changes and commit often with clear messages
 3. Push branch to origin: `git push -u origin feature/branch-name`
 4. Create PR against `main` branch: `gh pr create --repo DrMrsMoo/ambient-weather-heiligers`
-5. After PR approval, merge to main
-6. Deploy to Raspberry Pi
+5. After PR approval, **merge to main freely** - production is protected!
+6. (Optional) Create named release tag: `git tag -a v1.1.0 -m "Description"`
+7. Deploy when ready: `./deploy-to-production.sh main`
+
+**PRODUCTION PROTECTION:** Production runs from the `production-current` git tag, NOT from `main`. The cron job (5:20 AM/PM) always checks out this tag. You can merge to `main` without affecting production - deployment only happens when you explicitly move the tag using the deployment script.
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment procedures and [REFACTOR_PLAN.md](REFACTOR_PLAN.md) for modernization roadmap.
 
 ---
 
@@ -225,33 +230,47 @@ node runMainIIFE.js
 
 ---
 
-## Deployment (Raspberry Pi)
+## Deployment (Mac Production Environment)
 
-### Prerequisites
-- Node.js installed
-- Git repository cloned
-- Environment variables configured in `.env`
+### Current Setup
+- **Location:** `/Users/tina/Projects/ambient-weather-heiligers`
+- **Protection:** `production-current` git tag
+- **Cron Schedule:** 5:20 AM & 5:20 PM daily
+- **Cron Script:** `fetchAndIndex-production.sh` (checks out production tag)
 
-### Deployment Steps
+### How It Works
+
+The cron job **always** runs from the `production-current` tag, never from `main`. This means:
+- ✅ You can freely merge PRs to `main` without affecting production
+- ✅ Deployment only happens when you explicitly move the tag
+- ✅ Rollback is instant (just move the tag back)
+
+### Deploying Changes
+
 ```bash
-# On Raspberry Pi
-cd ~/Projects/ambient-weather-heiligers
+# After merging PRs to main, deploy using the script:
+./deploy-to-production.sh main
 
-# Pull latest main branch
-git fetch origin
-git checkout main
-git pull origin main
+# Or deploy a specific tag:
+./deploy-to-production.sh v1.2.0
 
-# Load environment
-source .env
-
-# Test manually
-node runMainIIFE.js
-
-# Setup cron job (runs every 5 minutes)
-crontab -e
-# Add: */5 * * * * cd ~/Projects/ambient-weather-heiligers && source .env && node runMainIIFE.js >> logs/cron.log 2>&1
+# The script will:
+# 1. Show you what's changing
+# 2. Test the version
+# 3. Ask for confirmation
+# 4. Move production-current tag if test passes
+# Next cron run (5:20 AM/PM) will use the new version
 ```
+
+### Quick Rollback
+
+```bash
+# If something breaks, rollback instantly:
+git tag -f production-current <previous-tag>
+git push origin production-current --force
+```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment procedures.
 
 ---
 
@@ -338,15 +357,27 @@ The Ambient Weather API counts backwards in time, which can cause duplicates. Th
 
 ---
 
-## Future Improvements (TODO)
+## Future Improvements
 
+See [REFACTOR_PLAN.md](REFACTOR_PLAN.md) for the comprehensive modernization roadmap, organized into 5 epics:
+
+**High Priority:**
+- [ ] Expand test coverage to >80%
+- [ ] Upgrade Elasticsearch client to v8+ (unblocks cluster upgrade to v9)
 - [ ] Convert to TypeScript
+
+**Medium Priority:**
+- [ ] Implement ECS logging format
+- [ ] Improve code quality and architecture
+- [ ] Add monitoring for Raspberry Pi
+
+**Low Priority:**
 - [ ] Automate de-duping entries
 - [ ] Set up ILM for automatic index rollover
-- [ ] Add monitoring for Raspberry Pi
-- [ ] Implement retry logic with exponential backoff
-- [ ] Add comprehensive unit tests
-- [ ] Set up alerts for cluster failures
+- [ ] Set up CI/CD pipeline
+- [ ] Add alerts for cluster failures
+
+Progress is tracked in REFACTOR_PLAN.md with detailed checklists for each epic.
 
 ---
 
@@ -365,7 +396,19 @@ The Ambient Weather API counts backwards in time, which can cause duplicates. Th
   - Parallel indexing to production and staging
   - Independent error handling with Promise.allSettled
   - Bug fixes for esClientMethods.js
+  - Backfill CLI with comprehensive gap detection
+  - Safe deployment strategy with git tags
 
 ---
 
-*Last updated: January 2, 2026*
+## Related Documentation
+
+- **[REFACTOR_PLAN.md](REFACTOR_PLAN.md)** - Comprehensive modernization roadmap with 5 epics
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Step-by-step deployment procedures and troubleshooting
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
+- **[README.md](../README.md)** - Project overview and usage instructions
+- **[scripts/README.md](../scripts/README.md)** - Documentation for all utility scripts
+
+---
+
+*Last updated: January 4, 2026*
