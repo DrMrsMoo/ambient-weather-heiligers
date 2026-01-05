@@ -5,9 +5,9 @@
   "main": "main.js",
   "scripts": {
     "test": "./node_modules/.bin/jest",
-    "start": "source .env && node runFetchRawData.js && node runConvertImperialToJsonl.js && node runConvertImperialToMetric.js",
+    "start": "source .env && node bin/runFetchRawData.js && node bin/runConvertImperialToJsonl.js && node bin/runConvertImperialToMetric.js",
     "run_main": "source .env && node runMainIIFE.js",
-    "backfill": "source .env && node runBackfill.js",
+    "backfill": "source .env && node bin/runBackfill.js",
     "verify-backfill": "source .env && node scripts/verify-backfill.js",
     "check-staging-gaps": "source .env && node scripts/check-recent-gaps.js",
     "check-prod-gaps": "source .env && node scripts/check-production-gaps.js",
