@@ -1,0 +1,3 @@
+Temp cronjobs for pi maintenance
+5:20 am & 5:20 pm
+logs: tail -f /Users/tina/Projects/ambient-weather-heiligers/logs/cron.log
