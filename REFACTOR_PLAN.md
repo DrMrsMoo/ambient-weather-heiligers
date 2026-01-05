@@ -1,4 +1,16 @@
 # Plan: Fix Code Issues and Verify Indexing Works
+## Introduction
+The plan for fixing code issues and verifying indexing works is outdated and needs a revision. Some work has already been done bit wasn't tracked against the plan.
+- Test coverage remains sporadic and incomplete (epic 1: high priority, blocking package upgrades)
+- Code works with Node 23.5.0. 
+- No other packages or dependencies have been updated (Epic 1: high priority, dependent on code coverage and testing robustness)
+- The code runs with elasticsearch nodejs client from a previous major to the major on which the clusters are running, which blocks upgrading the clusters to the latest major, 9. (Epic 1: medium priority)
+- Logs are formatted poorly, making for human readability bad (Epic 2: logging improvements)
+- Logs should be converted to ecs format for ease of injesting into elasticsearch for monitoring (Epic 2: logging improvements)
+- Code improvements w.r.t performance and upgrade to a senior engineer level (Epic 2: code improvements)
+- Maintainability is poor leading to infrequent updates and fixes (Epic 2: maintainability improvements)
+- Consider release tagging, which will be immutable.
+
 
 ## Overview
 The project has stalled due to critical bugs preventing data from being indexed. There's also significant legacy code mixed with the new dual-cluster implementation causing confusion. This plan will fix the blocking bugs, clean up dead code, and verify the system works end-to-end.

@@ -167,16 +167,7 @@ async function main() {
     }
   });
 
-  return 'STOP NOW - Legacy code below';
-  if (!stepsStates.fatalError === true) {
-    mainLogger.logInfo('DONE', stepsStates)
-    return 'DONE'
-  } else {
-    mainLogger.logError('[ERROR] [STEPSSTATE]:', stepsStates)
-    console.log()
-    mainLogger.logError('[ERROR] [STAGE]:', stage)
-    console.log()
-  }
+  return 'Done';
 };
 
 module.exports = main;
