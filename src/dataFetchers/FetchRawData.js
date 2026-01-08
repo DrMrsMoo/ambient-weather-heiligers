@@ -264,7 +264,6 @@ class FetchRawData {
         }
       }
       // fetch the last lot of data that doesn't fall into a batch
-      console.log('HELLOOOOOOOOOOO')
       const lastRecordsFromDate = Math.min(...this.datesArray.map((entry) => entry.from));
       const lastRecordsLimit = Math.floor(calcMinutesDiff(lastRecordsFromDate, dateOfLastDataSaved) / AW_CONSTANTS.dataInterval)
 
