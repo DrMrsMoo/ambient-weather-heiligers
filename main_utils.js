@@ -153,14 +153,15 @@ function prepareDataForBulkIndexing({ fileNamesArray, dataType, logger = null, f
     return dataFileRead.toString().trim().split("\n").flatMap((line) => {
       const record = JSON.parse(line);
       // Filter out records that are already indexed (dateutc <= filterAfterDate)
-      if (filterAfterDate !== null && record.dateutc <= filterAfterDate) {
+      // Use != null to handle both null and undefined while still allowing epoch 0
+      if (filterAfterDate != null && record.dateutc <= filterAfterDate) {
         return []; // Skip this record
       }
       return [{ index: { _index: targetAlias } }, record]
     });
   });
 
-  if (logger && filterAfterDate !== null) {
+  if (logger && filterAfterDate != null) {
     const recordCount = dataReadyForBulkIndexing.length / 2; // Each record has 2 entries (action + doc)
     logger.logInfo(`[prepareDataForBulkIndexing] Filtered to ${recordCount} ${dataType} records newer than ${new Date(filterAfterDate).toISOString()}`);
   }

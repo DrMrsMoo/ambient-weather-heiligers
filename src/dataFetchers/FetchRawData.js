@@ -222,8 +222,9 @@ class FetchRawData {
     this.allUniqueDates = this.extractUniqueDatesFromFiles(this.pathToFiles);
 
     // Use cluster-based date if provided, otherwise fall back to local files
+    // Use != null to handle both null and undefined while still allowing epoch 0
     let dateOfLastDataSaved;
-    if (clusterLatestDate !== null) {
+    if (clusterLatestDate != null) {
       dateOfLastDataSaved = clusterLatestDate;
       fetchRawDataLogger.logInfo('[getDataForDateRanges] Using cluster-based date:', new Date(clusterLatestDate).toISOString());
     } else {

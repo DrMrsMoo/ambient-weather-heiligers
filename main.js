@@ -121,13 +121,14 @@ async function main() {
   // Determine the fetch start date - use the OLDER of the two cluster dates
   // This ensures we fetch all data that either cluster might need
   let fetchFromDate = null;
-  if (prodLatestDate !== null && stagingLatestDate !== null) {
+  // Use != null to handle both null and undefined while still allowing epoch 0
+  if (prodLatestDate != null && stagingLatestDate != null) {
     fetchFromDate = Math.min(prodLatestDate, stagingLatestDate);
     mainLogger.logInfo(`[FETCH] Will fetch data newer than: ${new Date(fetchFromDate).toISOString()} (older of both clusters)`);
-  } else if (prodLatestDate !== null) {
+  } else if (prodLatestDate != null) {
     fetchFromDate = prodLatestDate;
     mainLogger.logInfo(`[FETCH] Will fetch data newer than: ${new Date(fetchFromDate).toISOString()} (production only)`);
-  } else if (stagingLatestDate !== null) {
+  } else if (stagingLatestDate != null) {
     fetchFromDate = stagingLatestDate;
     mainLogger.logInfo(`[FETCH] Will fetch data newer than: ${new Date(fetchFromDate).toISOString()} (staging only)`);
   } else {
@@ -137,7 +138,8 @@ async function main() {
   // step 1: fetch new data & convert it to JSONl
   try {
     // Pass the cluster-based date to FetchRawData if available
-    // Note: getDataForDateRanges uses local files if fetchFromDate is null
+    // 4th param (fetchFromDate): cluster-based reference date to prevent duplicates
+    // when multiple machines run cron jobs. Falls back to local files if null.
     const getNewDataPromiseResult = await fetchRawDataTester.getDataForDateRanges(false, undefined, false, fetchFromDate);
     console.log('getNewDataPromiseResult', getNewDataPromiseResult)
     // Check if result is the "too early" string
