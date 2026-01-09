@@ -119,6 +119,7 @@ function updateProgressState(stepState, logMeta, mainLogger, oldStates) {
  * @param {array} fileNamesArray
  * @param {string} dataType
  * @param {Logger} logger
+ * @param {number} filterAfterDate - optional epoch ms; only include records with dateutc > this value
  * @returns {array} flat array containing bulk payload to send to cluster.
  * @example
  // const results = prepareDataForBulkIndexing(mockedFileNamesArray, mockedDataType, mainUtilsLogger);
@@ -132,9 +133,7 @@ function updateProgressState(stepState, logMeta, mainLogger, oldStates) {
       date: '2022-01-10T14:20:00.000Z'
     },
  */
-function prepareDataForBulkIndexing(fileNamesArray, dataType, logger) {
-  // note: here I'm passing all the filenames, not just the ones that have data for dates not already in the cluster
-  // we will get duplicates.
+function prepareDataForBulkIndexing(fileNamesArray, dataType, logger, filterAfterDate = null) {
   const targetAlias = `all-ambient-weather-heiligers-${dataType}`;
   // fetch and read the data first
   const fullPathToFilesToRead = `data/ambient-weather-heiligers-${dataType}-jsonl`; // can be moved to the top.
@@ -147,9 +146,20 @@ function prepareDataForBulkIndexing(fileNamesArray, dataType, logger) {
     const dataFileRead = fs.readFileSync(fullPath);
     //https://www.elastic.co/guide/en/elasticsearch/client/javascript-api/current/bulk_examples.html
     return dataFileRead.toString().trim().split("\n").flatMap((line) => {
-      return [{ index: { _index: targetAlias } }, JSON.parse(line)]
+      const record = JSON.parse(line);
+      // Filter out records that are already indexed (dateutc <= filterAfterDate)
+      if (filterAfterDate !== null && record.dateutc <= filterAfterDate) {
+        return []; // Skip this record
+      }
+      return [{ index: { _index: targetAlias } }, record]
     });
   });
+
+  if (logger && filterAfterDate !== null) {
+    const recordCount = dataReadyForBulkIndexing.length / 2; // Each record has 2 entries (action + doc)
+    logger.logInfo(`[prepareDataForBulkIndexing] Filtered to ${recordCount} ${dataType} records newer than ${new Date(filterAfterDate).toISOString()}`);
+  }
+
   return dataReadyForBulkIndexing;
 }
 

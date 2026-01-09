@@ -77,9 +77,58 @@ async function main() {
   stepsStates = updateProgressState({ fetchNewData: true }, { info: 'starting main function', includeTimestamp: true }, mainLogger)
   logProgress(mainLogger, stage, stepsStates);
 
+  // STEP 0: Query both clusters FIRST to get their latest indexed dates
+  // This prevents duplicate data when multiple machines (Pi, Mac) run the cron job
+  mainLogger.logInfo(`[${new Date().toISOString()}] Querying clusters for latest indexed dates...`);
+
+  let prodLatestDate = null;
+  let stagingLatestDate = null;
+
+  try {
+    // Initialize both clusters to get their latest dates
+    const [prodInitResult, stagingInitResult] = await Promise.allSettled([
+      prodIndexer.initialize(),
+      stagingIndexer.initialize()
+    ]);
+
+    if (prodInitResult.status === 'fulfilled' && prodInitResult.value.outcome === 'success') {
+      prodLatestDate = prodInitResult.value.latestImperialDoc[0]._source.dateutc;
+      mainLogger.logInfo(`[PRODUCTION] Latest indexed date: ${new Date(prodLatestDate).toISOString()}`);
+    } else {
+      mainLogger.logWarning(`[PRODUCTION] Could not get latest date, will use local files as fallback`);
+    }
+
+    if (stagingInitResult.status === 'fulfilled' && stagingInitResult.value.outcome === 'success') {
+      stagingLatestDate = stagingInitResult.value.latestImperialDoc[0]._source.dateutc;
+      mainLogger.logInfo(`[STAGING] Latest indexed date: ${new Date(stagingLatestDate).toISOString()}`);
+    } else {
+      mainLogger.logWarning(`[STAGING] Could not get latest date, will use local files as fallback`);
+    }
+  } catch (err) {
+    mainLogger.logWarning(`[CLUSTER QUERY] Error querying clusters for latest dates:`, err.message);
+  }
+
+  // Determine the fetch start date - use the OLDER of the two cluster dates
+  // This ensures we fetch all data that either cluster might need
+  let fetchFromDate = null;
+  if (prodLatestDate !== null && stagingLatestDate !== null) {
+    fetchFromDate = Math.min(prodLatestDate, stagingLatestDate);
+    mainLogger.logInfo(`[FETCH] Will fetch data newer than: ${new Date(fetchFromDate).toISOString()} (older of both clusters)`);
+  } else if (prodLatestDate !== null) {
+    fetchFromDate = prodLatestDate;
+    mainLogger.logInfo(`[FETCH] Will fetch data newer than: ${new Date(fetchFromDate).toISOString()} (production only)`);
+  } else if (stagingLatestDate !== null) {
+    fetchFromDate = stagingLatestDate;
+    mainLogger.logInfo(`[FETCH] Will fetch data newer than: ${new Date(fetchFromDate).toISOString()} (staging only)`);
+  } else {
+    mainLogger.logInfo(`[FETCH] No cluster dates available, will use local files to determine fetch range`);
+  }
+
   // step 1: fetch new data & convert it to JSONl
   try {
-    const getNewDataPromiseResult = await fetchRawDataTester.getDataForDateRanges(false);
+    // Pass the cluster-based date to FetchRawData if available
+    // Note: getDataForDateRanges uses local files if fetchFromDate is null
+    const getNewDataPromiseResult = await fetchRawDataTester.getDataForDateRanges(false, undefined, false, fetchFromDate);
     console.log('getNewDataPromiseResult', getNewDataPromiseResult)
     // Check if result is the "too early" string
     if (getNewDataPromiseResult === 'too early') {
@@ -113,47 +162,49 @@ async function main() {
   }
 
   // Helper function to index data to a specific cluster
-  async function indexToCluster(indexer, clusterName) {
+  // Each cluster filters to only include records newer than its own latest date
+  async function indexToCluster(indexer, clusterName, clusterLatestDate) {
     try {
-      mainLogger.logInfo(`[${clusterName}] Initializing cluster connection...`);
-      const initResult = await indexer.initialize();
+      mainLogger.logInfo(`[${clusterName}] Preparing to index (filtering records newer than ${clusterLatestDate ? new Date(clusterLatestDate).toISOString() : 'none'})...`);
 
-      if (!!initResult === true && initResult.outcome === 'success') {
-        mainLogger.logInfo(`[${clusterName}] Cluster ready! Latest imperial: ${initResult.latestImperialDoc[0]._source.dateutc}, Latest metric: ${initResult.latestMetricDoc[0]._source.dateutc}`);
-
-        // Index imperial data if available
-        if (imperialJSONLFileNames.length > 0) {
-          const imperialData = prepareDataForBulkIndexing(imperialJSONLFileNames, 'imperial');
-          mainLogger.logInfo(`[${clusterName}] Indexing imperial data...`);
+      // Index imperial data if available
+      if (imperialJSONLFileNames.length > 0) {
+        const imperialData = prepareDataForBulkIndexing(imperialJSONLFileNames, 'imperial', mainLogger, clusterLatestDate);
+        if (imperialData.length > 0) {
+          mainLogger.logInfo(`[${clusterName}] Indexing ${imperialData.length / 2} imperial documents...`);
           await indexer.bulkIndexDocuments(imperialData, 'imperial');
           mainLogger.logInfo(`[${clusterName}] Imperial data indexed successfully`);
+        } else {
+          mainLogger.logInfo(`[${clusterName}] No new imperial data to index (all records already indexed)`);
         }
+      }
 
-        // Index metric data if available
-        if (metricJSONLFileNames.length > 0) {
-          const metricData = prepareDataForBulkIndexing(metricJSONLFileNames, 'metric');
-          mainLogger.logInfo(`[${clusterName}] Indexing metric data...`);
+      // Index metric data if available
+      if (metricJSONLFileNames.length > 0) {
+        const metricData = prepareDataForBulkIndexing(metricJSONLFileNames, 'metric', mainLogger, clusterLatestDate);
+        if (metricData.length > 0) {
+          mainLogger.logInfo(`[${clusterName}] Indexing ${metricData.length / 2} metric documents...`);
           await indexer.bulkIndexDocuments(metricData, 'metric');
           mainLogger.logInfo(`[${clusterName}] Metric data indexed successfully`);
+        } else {
+          mainLogger.logInfo(`[${clusterName}] No new metric data to index (all records already indexed)`);
         }
-
-        mainLogger.logInfo(`[${new Date().toISOString()}] [${clusterName}] Indexing complete`);
-        return { cluster: clusterName, status: 'success' };
-      } else {
-        mainLogger.logError(`[${clusterName}] Cluster not ready: ${initResult.outcome}`);
-        return { cluster: clusterName, status: 'failed', reason: initResult.outcome };
       }
+
+      mainLogger.logInfo(`[${new Date().toISOString()}] [${clusterName}] Indexing complete`);
+      return { cluster: clusterName, status: 'success' };
     } catch (err) {
       mainLogger.logError(`[${clusterName}] Indexing failed:`, err);
       return { cluster: clusterName, status: 'error', error: err.message };
     }
   }
 
-  // Index to both clusters independently - failures in one don't affect the other
+  // Index to both clusters independently - each with its own filter date
+  // This prevents duplicates: each cluster only gets records it doesn't already have
   mainLogger.logInfo(`[${new Date().toISOString()}] Starting dual-cluster indexing...`);
   const results = await Promise.allSettled([
-    indexToCluster(prodIndexer, 'PRODUCTION'),
-    indexToCluster(stagingIndexer, 'STAGING')
+    indexToCluster(prodIndexer, 'PRODUCTION', prodLatestDate),
+    indexToCluster(stagingIndexer, 'STAGING', stagingLatestDate)
   ]);
 
   // Log final results
