@@ -472,13 +472,13 @@ async function performBackfill(client, clusterName, startEpoch, endEpoch) {
 
     // Step 4: Index imperial data
     backfillLogger.logInfo(`[${clusterName}] Indexing imperial data...`);
-    const imperialPayload = prepareDataForBulkIndexing(filesForIndexing, 'imperial', backfillLogger);
+    const imperialPayload = prepareDataForBulkIndexing({ fileNamesArray: filesForIndexing, dataType: 'imperial', logger: backfillLogger });
     const imperialResult = await indexer.bulkIndexDocuments(imperialPayload, 'imperial');
     backfillLogger.logInfo(`[${clusterName}] Imperial indexing complete. Total docs: ${imperialResult.indexCounts.count}`);
 
     // Step 5: Index metric data
     backfillLogger.logInfo(`[${clusterName}] Indexing metric data...`);
-    const metricPayload = prepareDataForBulkIndexing(filesForIndexing, 'metric', backfillLogger);
+    const metricPayload = prepareDataForBulkIndexing({ fileNamesArray: filesForIndexing, dataType: 'metric', logger: backfillLogger });
     const metricResult = await indexer.bulkIndexDocuments(metricPayload, 'metric');
     backfillLogger.logInfo(`[${clusterName}] Metric indexing complete. Total docs: ${metricResult.indexCounts.count}`);
 

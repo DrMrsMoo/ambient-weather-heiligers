@@ -115,25 +115,30 @@ function updateProgressState(stepState, logMeta, mainLogger, oldStates) {
   return newState
 };
 /**
+ * Prepares data for Elasticsearch bulk indexing
  *
- * @param {array} fileNamesArray
- * @param {string} dataType
- * @param {Logger} logger
- * @param {number} filterAfterDate - optional epoch ms; only include records with dateutc > this value
+ * @param {object} options - Named parameters object
+ * @param {array} options.fileNamesArray - Array of file names (without extension) to process
+ * @param {string} options.dataType - 'imperial' or 'metric'
+ * @param {Logger} [options.logger] - Optional logger instance
+ * @param {number} [options.filterAfterDate] - Optional epoch ms; only include records with dateutc > this value
  * @returns {array} flat array containing bulk payload to send to cluster.
  * @example
- // const results = prepareDataForBulkIndexing(mockedFileNamesArray, mockedDataType, mainUtilsLogger);
-/**
- * { index: { _index: `ambient_weather_heiligers_${dataType}*` } },
-    {
-      dateutc: 1641824400000,
-      tempinf: 70.3,
-      humidityin: 37,
-      ...,
-      date: '2022-01-10T14:20:00.000Z'
-    },
+ * const results = prepareDataForBulkIndexing({
+ *   fileNamesArray: ['1641684000000_1641752460000'],
+ *   dataType: 'imperial',
+ *   logger: mainLogger,
+ *   filterAfterDate: 1641684000000
+ * });
+ *
+ * // Returns:
+ * // [
+ * //   { index: { _index: 'all-ambient-weather-heiligers-imperial' } },
+ * //   { dateutc: 1641824400000, tempinf: 70.3, ... },
+ * //   ...
+ * // ]
  */
-function prepareDataForBulkIndexing(fileNamesArray, dataType, logger, filterAfterDate = null) {
+function prepareDataForBulkIndexing({ fileNamesArray, dataType, logger = null, filterAfterDate = null }) {
   const targetAlias = `all-ambient-weather-heiligers-${dataType}`;
   // fetch and read the data first
   const fullPathToFilesToRead = `data/ambient-weather-heiligers-${dataType}-jsonl`; // can be moved to the top.

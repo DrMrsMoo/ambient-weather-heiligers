@@ -92,15 +92,25 @@ async function main() {
     ]);
 
     if (prodInitResult.status === 'fulfilled' && prodInitResult.value.outcome === 'success') {
-      prodLatestDate = prodInitResult.value.latestImperialDoc[0]._source.dateutc;
-      mainLogger.logInfo(`[PRODUCTION] Latest indexed date: ${new Date(prodLatestDate).toISOString()}`);
+      const latestDocs = prodInitResult.value.latestImperialDoc;
+      if (Array.isArray(latestDocs) && latestDocs.length > 0 && latestDocs[0]?._source?.dateutc) {
+        prodLatestDate = latestDocs[0]._source.dateutc;
+        mainLogger.logInfo(`[PRODUCTION] Latest indexed date: ${new Date(prodLatestDate).toISOString()}`);
+      } else {
+        mainLogger.logWarning(`[PRODUCTION] No documents found in cluster, will use local files as fallback`);
+      }
     } else {
       mainLogger.logWarning(`[PRODUCTION] Could not get latest date, will use local files as fallback`);
     }
 
     if (stagingInitResult.status === 'fulfilled' && stagingInitResult.value.outcome === 'success') {
-      stagingLatestDate = stagingInitResult.value.latestImperialDoc[0]._source.dateutc;
-      mainLogger.logInfo(`[STAGING] Latest indexed date: ${new Date(stagingLatestDate).toISOString()}`);
+      const latestDocs = stagingInitResult.value.latestImperialDoc;
+      if (Array.isArray(latestDocs) && latestDocs.length > 0 && latestDocs[0]?._source?.dateutc) {
+        stagingLatestDate = latestDocs[0]._source.dateutc;
+        mainLogger.logInfo(`[STAGING] Latest indexed date: ${new Date(stagingLatestDate).toISOString()}`);
+      } else {
+        mainLogger.logWarning(`[STAGING] No documents found in cluster, will use local files as fallback`);
+      }
     } else {
       mainLogger.logWarning(`[STAGING] Could not get latest date, will use local files as fallback`);
     }
@@ -169,7 +179,12 @@ async function main() {
 
       // Index imperial data if available
       if (imperialJSONLFileNames.length > 0) {
-        const imperialData = prepareDataForBulkIndexing(imperialJSONLFileNames, 'imperial', mainLogger, clusterLatestDate);
+        const imperialData = prepareDataForBulkIndexing({
+            fileNamesArray: imperialJSONLFileNames,
+            dataType: 'imperial',
+            logger: mainLogger,
+            filterAfterDate: clusterLatestDate
+          });
         if (imperialData.length > 0) {
           mainLogger.logInfo(`[${clusterName}] Indexing ${imperialData.length / 2} imperial documents...`);
           await indexer.bulkIndexDocuments(imperialData, 'imperial');
@@ -181,7 +196,12 @@ async function main() {
 
       // Index metric data if available
       if (metricJSONLFileNames.length > 0) {
-        const metricData = prepareDataForBulkIndexing(metricJSONLFileNames, 'metric', mainLogger, clusterLatestDate);
+        const metricData = prepareDataForBulkIndexing({
+            fileNamesArray: metricJSONLFileNames,
+            dataType: 'metric',
+            logger: mainLogger,
+            filterAfterDate: clusterLatestDate
+          });
         if (metricData.length > 0) {
           mainLogger.logInfo(`[${clusterName}] Indexing ${metricData.length / 2} metric documents...`);
           await indexer.bulkIndexDocuments(metricData, 'metric');

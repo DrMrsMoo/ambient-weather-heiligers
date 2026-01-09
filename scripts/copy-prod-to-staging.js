@@ -98,13 +98,13 @@ async function copyProductionToStaging() {
 
     // Step 4: Index imperial data to staging
     logger.logInfo('\nStep 4: Indexing imperial data to STAGING...');
-    const imperialPayload = prepareDataForBulkIndexing([filename], 'imperial', logger);
+    const imperialPayload = prepareDataForBulkIndexing({ fileNamesArray: [filename], dataType: 'imperial', logger });
     const imperialResult = await indexer.bulkIndexDocuments(imperialPayload, 'imperial');
     logger.logInfo(`  ✓ Imperial indexing complete. Docs: ${imperialResult.indexCounts.count}, Errors: ${imperialResult.erroredDocuments.length}`);
 
     // Step 5: Index metric data to staging
     logger.logInfo('\nStep 5: Indexing metric data to STAGING...');
-    const metricPayload = prepareDataForBulkIndexing([filename], 'metric', logger);
+    const metricPayload = prepareDataForBulkIndexing({ fileNamesArray: [filename], dataType: 'metric', logger });
     const metricResult = await indexer.bulkIndexDocuments(metricPayload, 'metric');
     logger.logInfo(`  ✓ Metric indexing complete. Docs: ${metricResult.indexCounts.count}, Errors: ${metricResult.erroredDocuments.length}`);
 

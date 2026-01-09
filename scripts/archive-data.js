@@ -17,10 +17,14 @@
  *                 Example: /Volumes/ExternalDrive/weather-archive
  *
  * The script will:
- * 1. Query both clusters for their earliest indexed date
+ * 1. Query both clusters for their latest indexed date
  * 2. Find local files whose data is older than the safe archive threshold
- * 3. Verify all records in those files are indexed in BOTH clusters
- * 4. Move verified files to ARCHIVE_PATH/data/{year}/{month}/
+ * 3. Move verified files to ARCHIVE_PATH/data/{year}/{month}/
+ *
+ * LIMITATION: This script verifies that the cluster's latest indexed date is newer than
+ * the file's data, but does NOT verify that every individual record in the file was indexed.
+ * If there are gaps in the indexed data, some records may be archived without being indexed.
+ * The backfill script should be run periodically to detect and fill any gaps.
  */
 
 require('dotenv').config();
@@ -32,11 +36,9 @@ const Logger = require('../src/logger');
 
 const logger = new Logger('[archive-data]');
 
-// Parse CLI arguments
-const args = process.argv.slice(2);
-const dryRun = args.includes('--dry-run');
-const daysIndex = args.indexOf('--days');
-const retentionDays = daysIndex !== -1 ? parseInt(args[daysIndex + 1], 10) : 7;
+// Constants
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const DEFAULT_RETENTION_DAYS = 7;
 
 const DATA_DIRS = {
   imperial: 'data/ambient-weather-heiligers-imperial',
@@ -44,26 +46,79 @@ const DATA_DIRS = {
   metricJsonl: 'data/ambient-weather-heiligers-metric-jsonl'
 };
 
+// Parse CLI arguments
+const args = process.argv.slice(2);
+const dryRun = args.includes('--dry-run');
+const daysIndex = args.indexOf('--days');
+
+let retentionDays = DEFAULT_RETENTION_DAYS;
+if (daysIndex !== -1) {
+  const daysValue = args[daysIndex + 1];
+  const parsedDays = parseInt(daysValue, 10);
+
+  if (!daysValue || Number.isNaN(parsedDays) || parsedDays <= 0) {
+    logger.logError('Invalid value for --days. Please provide a positive integer, e.g. "--days 7".');
+    process.exit(1);
+  }
+
+  retentionDays = parsedDays;
+}
+
+/**
+ * Determine the archive subdirectory based on file path
+ */
+function getArchiveSubDir(filePath) {
+  if (filePath.includes('imperial-jsonl')) {
+    return 'imperial-jsonl';
+  }
+  if (filePath.includes('metric-jsonl')) {
+    return 'metric-jsonl';
+  }
+  return 'imperial';
+}
+
+/**
+ * Validate that required data directories exist
+ */
+function validateDataDirs() {
+  const missingDirs = [];
+
+  for (const [name, dirPath] of Object.entries(DATA_DIRS)) {
+    if (!fs.existsSync(dirPath)) {
+      missingDirs.push(`${name}: ${dirPath}`);
+    }
+  }
+
+  if (missingDirs.length > 0) {
+    logger.logWarning(`Some data directories do not exist:\n  - ${missingDirs.join('\n  - ')}`);
+    return false;
+  }
+
+  return true;
+}
+
 async function main() {
   logger.logInfo(`Starting archive process (dry-run: ${dryRun}, retention: ${retentionDays} days)`);
+
+  // Validate data directories exist
+  if (!validateDataDirs()) {
+    logger.logWarning('Continuing with available directories...');
+  }
 
   // Check for ARCHIVE_PATH
   const archivePath = process.env.ARCHIVE_PATH;
   if (!archivePath && !dryRun) {
-    logger.logError('ARCHIVE_PATH environment variable is required');
-    logger.logInfo('Set ARCHIVE_PATH to the destination directory for archived files');
-    logger.logInfo('Example: export ARCHIVE_PATH=/Volumes/ExternalDrive/weather-archive');
+    logger.logError('ARCHIVE_PATH environment variable is required. Set it to the destination directory for archived files (e.g., export ARCHIVE_PATH=/Volumes/ExternalDrive/weather-archive)');
     process.exit(1);
   }
 
   if (!dryRun && !fs.existsSync(archivePath)) {
-    logger.logError(`Archive path does not exist: ${archivePath}`);
-    logger.logInfo('Please ensure the archive destination is mounted/accessible');
+    logger.logError(`Archive path does not exist: ${archivePath}. Please ensure the archive destination is mounted/accessible.`);
     process.exit(1);
   }
 
   // Calculate cutoff date (files older than this can be archived)
-  const cutoffDate = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
+  const cutoffDate = Date.now() - (retentionDays * MS_PER_DAY);
   logger.logInfo(`Cutoff date: ${new Date(cutoffDate).toISOString()} (files with all data before this may be archived)`);
 
   // Initialize cluster clients
@@ -71,14 +126,19 @@ async function main() {
   const prodClient = createEsClient('ES');
   const stagingClient = createEsClient('STAGING');
 
-  // Get latest indexed dates from both clusters
-  const [prodLatest, stagingLatest] = await Promise.all([
+  // Get latest indexed dates from both clusters - use allSettled so one failure doesn't block the other
+  const [prodResult, stagingResult] = await Promise.allSettled([
     getLatestIndexedDate(prodClient, 'PRODUCTION'),
     getLatestIndexedDate(stagingClient, 'STAGING')
   ]);
 
+  const prodLatest = prodResult.status === 'fulfilled' ? prodResult.value : null;
+  const stagingLatest = stagingResult.status === 'fulfilled' ? stagingResult.value : null;
+
   if (!prodLatest || !stagingLatest) {
-    logger.logError('Could not determine latest indexed dates from clusters. Aborting.');
+    logger.logError('Could not determine latest indexed dates from both clusters. Aborting to prevent data loss.');
+    if (!prodLatest) logger.logError('  - PRODUCTION: Failed to get latest date');
+    if (!stagingLatest) logger.logError('  - STAGING: Failed to get latest date');
     process.exit(1);
   }
 
@@ -157,6 +217,9 @@ async function getLatestIndexedDate(client, clusterName) {
 /**
  * Find files eligible for archiving
  * Files must have ALL data older than both cutoffDate AND safeArchiveDate
+ *
+ * Note: Uses synchronous fs methods which is acceptable for a CLI script
+ * that processes a limited number of files sequentially.
  */
 async function findFilesToArchive(cutoffDate, safeArchiveDate) {
   const effectiveCutoff = Math.min(cutoffDate, safeArchiveDate);
@@ -235,9 +298,7 @@ async function archiveFileSet(fileSet, archivePath) {
 
   for (const filePath of fileSet.files) {
     const fileName = path.basename(filePath);
-    const subDir = filePath.includes('imperial-jsonl') ? 'imperial-jsonl'
-                 : filePath.includes('metric-jsonl') ? 'metric-jsonl'
-                 : 'imperial';
+    const subDir = getArchiveSubDir(filePath);
 
     const destDir = path.join(archivePath, 'data', subDir, `${year}`, month);
     const destPath = path.join(destDir, fileName);
