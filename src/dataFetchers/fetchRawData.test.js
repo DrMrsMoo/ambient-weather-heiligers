@@ -388,7 +388,97 @@ describe('FetchRawData', () => {
       const result = await rawDataFetcher.getDataForDateRanges(false, Date.parse('2020-07-18T17:55:00.000Z'));
       expect(rawDataFetcher.getLastRecordedUTCDate).toHaveBeenCalled();
       expect(rawDataFetcher.fetchAndStoreData.mock.calls.length).toEqual(0);
-    })
+    });
+
+    describe('clusterLatestDate parameter (4th param)', () => {
+      it('uses clusterLatestDate instead of local files when provided', async () => {
+        rawDataFetcher = new FetchRawData(mockAWApi, mockFs);
+        const clusterDate = Date.parse('2020-07-18T12:00:00.000Z');
+        const fromDate = Date.parse('2020-07-19T12:00:00.000Z');
+
+        // Mock extractUniqueDatesFromFiles to return a different (older) date
+        jest.spyOn(rawDataFetcher, 'extractUniqueDatesFromFiles').mockImplementation(() => [Date.parse('2020-07-10T00:00:00.000Z')]);
+        // Mock getLastRecordedUTCDate - this should NOT be used when clusterLatestDate is provided
+        const getLastRecordedSpy = jest.spyOn(rawDataFetcher, 'getLastRecordedUTCDate');
+        jest.spyOn(rawDataFetcher, 'fetchAndStoreData').mockImplementation((date, numRecords) => ({
+          from: clusterDate,
+          to: fromDate
+        }));
+
+        await rawDataFetcher.getDataForDateRanges(false, fromDate, false, clusterDate);
+
+        // getLastRecordedUTCDate should NOT be called when clusterLatestDate is provided
+        expect(getLastRecordedSpy).not.toHaveBeenCalled();
+      });
+
+      it('falls back to local files when clusterLatestDate is null', async () => {
+        rawDataFetcher = new FetchRawData(mockAWApi, mockFs);
+        const fromDate = Date.parse('2020-07-19T12:00:00.000Z');
+        const localFileDate = Date.parse('2020-07-18T00:00:00.000Z');
+
+        jest.spyOn(rawDataFetcher, 'extractUniqueDatesFromFiles').mockImplementation(() => [localFileDate]);
+        const getLastRecordedSpy = jest.spyOn(rawDataFetcher, 'getLastRecordedUTCDate').mockImplementation(() => localFileDate);
+        jest.spyOn(rawDataFetcher, 'fetchAndStoreData').mockImplementation(() => ({
+          from: localFileDate,
+          to: fromDate
+        }));
+
+        await rawDataFetcher.getDataForDateRanges(false, fromDate, false, null);
+
+        // getLastRecordedUTCDate SHOULD be called when clusterLatestDate is null
+        expect(getLastRecordedSpy).toHaveBeenCalled();
+      });
+
+      it('falls back to local files when clusterLatestDate is undefined', async () => {
+        rawDataFetcher = new FetchRawData(mockAWApi, mockFs);
+        const fromDate = Date.parse('2020-07-19T12:00:00.000Z');
+        const localFileDate = Date.parse('2020-07-18T00:00:00.000Z');
+
+        jest.spyOn(rawDataFetcher, 'extractUniqueDatesFromFiles').mockImplementation(() => [localFileDate]);
+        const getLastRecordedSpy = jest.spyOn(rawDataFetcher, 'getLastRecordedUTCDate').mockImplementation(() => localFileDate);
+        jest.spyOn(rawDataFetcher, 'fetchAndStoreData').mockImplementation(() => ({
+          from: localFileDate,
+          to: fromDate
+        }));
+
+        await rawDataFetcher.getDataForDateRanges(false, fromDate, false, undefined);
+
+        expect(getLastRecordedSpy).toHaveBeenCalled();
+      });
+
+      it('handles clusterLatestDate of 0 (epoch) correctly', async () => {
+        rawDataFetcher = new FetchRawData(mockAWApi, mockFs);
+        const clusterDate = 0; // Epoch 0 - valid timestamp for 1970-01-01
+        const fromDate = Date.parse('2020-07-19T12:00:00.000Z');
+
+        jest.spyOn(rawDataFetcher, 'extractUniqueDatesFromFiles').mockImplementation(() => [Date.parse('2020-07-10T00:00:00.000Z')]);
+        const getLastRecordedSpy = jest.spyOn(rawDataFetcher, 'getLastRecordedUTCDate');
+        jest.spyOn(rawDataFetcher, 'fetchAndStoreData').mockImplementation(() => ({
+          from: clusterDate,
+          to: fromDate
+        }));
+
+        await rawDataFetcher.getDataForDateRanges(false, fromDate, false, clusterDate);
+
+        // With epoch 0 as clusterLatestDate, getLastRecordedUTCDate should NOT be called
+        // because 0 is a valid timestamp (!=null check should pass for 0)
+        expect(getLastRecordedSpy).not.toHaveBeenCalled();
+      });
+
+      it('returns "too early" if time since clusterLatestDate is less than 5 minutes', async () => {
+        rawDataFetcher = new FetchRawData(mockAWApi, mockFs);
+        const clusterDate = Date.parse('2020-07-19T11:58:00.000Z');
+        const fromDate = Date.parse('2020-07-19T12:00:00.000Z'); // Only 2 minutes later
+
+        jest.spyOn(rawDataFetcher, 'extractUniqueDatesFromFiles').mockImplementation(() => []);
+        jest.spyOn(rawDataFetcher, 'fetchAndStoreData');
+
+        const result = await rawDataFetcher.getDataForDateRanges(false, fromDate, false, clusterDate);
+
+        expect(result).toBe('too early');
+        expect(rawDataFetcher.fetchAndStoreData).not.toHaveBeenCalled();
+      });
+    });
   });
 });
 

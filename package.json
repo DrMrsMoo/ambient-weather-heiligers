@@ -17,7 +17,11 @@
     "check-duplicates": "source .env && node scripts/check-duplicates.js",
     "check-gap-details": "source .env && node scripts/check-gap-details.js",
     "verify-indexing": "source .env && node scripts/verify-indexing.js",
-    "manual-index": "source .env && node scripts/manual-index.js"
+    "manual-index": "source .env && node scripts/manual-index.js",
+    "archive-data": "source .env && node scripts/archive-data.js",
+    "archive-data:dry-run": "source .env && node scripts/archive-data.js --dry-run",
+    "archive-logs": "source .env && ./scripts/archive-logs.sh",
+    "archive-logs:dry-run": "source .env && ./scripts/archive-logs.sh --dry-run"
   },
   "author": "Tina Heiligers",
   "license": "MIT",

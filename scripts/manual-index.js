@@ -100,7 +100,7 @@ async function indexToCluster(indexer, clusterName, fileNames) {
 
     // Index imperial data
     manualLogger.logInfo(`[${clusterName}] Preparing imperial data...`);
-    const imperialData = prepareDataForBulkIndexing(fileNames, 'imperial');
+    const imperialData = prepareDataForBulkIndexing({ fileNamesArray: fileNames, dataType: 'imperial' });
     manualLogger.logInfo(`[${clusterName}] Imperial payload size: ${imperialData.length} items`);
 
     if (imperialData.length > 0) {
@@ -114,7 +114,7 @@ async function indexToCluster(indexer, clusterName, fileNames) {
 
     // Index metric data
     manualLogger.logInfo(`[${clusterName}] Preparing metric data...`);
-    const metricData = prepareDataForBulkIndexing(fileNames, 'metric');
+    const metricData = prepareDataForBulkIndexing({ fileNamesArray: fileNames, dataType: 'metric' });
     manualLogger.logInfo(`[${clusterName}] Metric payload size: ${metricData.length} items`);
 
     if (metricData.length > 0) {

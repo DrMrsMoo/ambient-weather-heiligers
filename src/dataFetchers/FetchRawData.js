@@ -202,24 +202,35 @@ class FetchRawData {
    * @param {boolean} skipSave: saving to file is skipped if true
    * @param {integer} fromDate: date until which to fetch new data for (calls are made going back in time)
    * @param {boolean} bypassRateLimit: skip the rate limit check (useful for backfill operations)
+   * @param {integer} clusterLatestDate: optional - if provided, use this as the reference date instead of local files (prevents duplicates when multiple machines run cron)
    * @returns {obj | string} { dataFetchForDates: <array>, dataFileNames: <array } | "too early" if less than 5 min has passed between the current time and the most recent datetime on file
    array of date-times in milliseconds since epoch, array of filenames where the data was/would have been stored
    */
   // main function for this class
-  async getDataForDateRanges(skipSave = true, fromDate, bypassRateLimit = false) {
+  async getDataForDateRanges(skipSave = true, fromDate, bypassRateLimit = false, clusterLatestDate = null) {
 
     if (!fromDate) {
       fromDate = this.now;
       console.log('setting fromDate to now')
     }
-    fetchRawDataLogger.logInfo('[getDataForDateRanges] args: skipSave, fromDate, bypassRateLimit', { skipSave: !!skipSave, fromDate: fromDate, bypassRateLimit: !!bypassRateLimit });
+    fetchRawDataLogger.logInfo('[getDataForDateRanges] args: skipSave, fromDate, bypassRateLimit, clusterLatestDate', { skipSave: !!skipSave, fromDate: fromDate, bypassRateLimit: !!bypassRateLimit, clusterLatestDate: clusterLatestDate });
 
     this.skipSave = skipSave;
     // this is all setup before I can start fetching the data
 
     // set the unique dates entry set to the class instance
     this.allUniqueDates = this.extractUniqueDatesFromFiles(this.pathToFiles);
-    const dateOfLastDataSaved = this.getLastRecordedUTCDate();
+
+    // Use cluster-based date if provided, otherwise fall back to local files
+    // Use != null to handle both null and undefined while still allowing epoch 0
+    let dateOfLastDataSaved;
+    if (clusterLatestDate != null) {
+      dateOfLastDataSaved = clusterLatestDate;
+      fetchRawDataLogger.logInfo('[getDataForDateRanges] Using cluster-based date:', new Date(clusterLatestDate).toISOString());
+    } else {
+      dateOfLastDataSaved = this.getLastRecordedUTCDate();
+      fetchRawDataLogger.logInfo('[getDataForDateRanges] Using local files date:', new Date(dateOfLastDataSaved).toISOString());
+    }
 
     let minSinceLastData, estTotalNumRecordsToFetch;
 

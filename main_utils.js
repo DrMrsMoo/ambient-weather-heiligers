@@ -115,26 +115,30 @@ function updateProgressState(stepState, logMeta, mainLogger, oldStates) {
   return newState
 };
 /**
+ * Prepares data for Elasticsearch bulk indexing
  *
- * @param {array} fileNamesArray
- * @param {string} dataType
- * @param {Logger} logger
+ * @param {object} options - Named parameters object
+ * @param {array} options.fileNamesArray - Array of file names (without extension) to process
+ * @param {string} options.dataType - 'imperial' or 'metric'
+ * @param {Logger} [options.logger] - Optional logger instance
+ * @param {number} [options.filterAfterDate] - Optional epoch ms; only include records with dateutc > this value
  * @returns {array} flat array containing bulk payload to send to cluster.
  * @example
- // const results = prepareDataForBulkIndexing(mockedFileNamesArray, mockedDataType, mainUtilsLogger);
-/**
- * { index: { _index: `ambient_weather_heiligers_${dataType}*` } },
-    {
-      dateutc: 1641824400000,
-      tempinf: 70.3,
-      humidityin: 37,
-      ...,
-      date: '2022-01-10T14:20:00.000Z'
-    },
+ * const results = prepareDataForBulkIndexing({
+ *   fileNamesArray: ['1641684000000_1641752460000'],
+ *   dataType: 'imperial',
+ *   logger: mainLogger,
+ *   filterAfterDate: 1641684000000
+ * });
+ *
+ * // Returns:
+ * // [
+ * //   { index: { _index: 'all-ambient-weather-heiligers-imperial' } },
+ * //   { dateutc: 1641824400000, tempinf: 70.3, ... },
+ * //   ...
+ * // ]
  */
-function prepareDataForBulkIndexing(fileNamesArray, dataType, logger) {
-  // note: here I'm passing all the filenames, not just the ones that have data for dates not already in the cluster
-  // we will get duplicates.
+function prepareDataForBulkIndexing({ fileNamesArray, dataType, logger = null, filterAfterDate = null }) {
   const targetAlias = `all-ambient-weather-heiligers-${dataType}`;
   // fetch and read the data first
   const fullPathToFilesToRead = `data/ambient-weather-heiligers-${dataType}-jsonl`; // can be moved to the top.
@@ -147,9 +151,21 @@ function prepareDataForBulkIndexing(fileNamesArray, dataType, logger) {
     const dataFileRead = fs.readFileSync(fullPath);
     //https://www.elastic.co/guide/en/elasticsearch/client/javascript-api/current/bulk_examples.html
     return dataFileRead.toString().trim().split("\n").flatMap((line) => {
-      return [{ index: { _index: targetAlias } }, JSON.parse(line)]
+      const record = JSON.parse(line);
+      // Filter out records that are already indexed (dateutc <= filterAfterDate)
+      // Use != null to handle both null and undefined while still allowing epoch 0
+      if (filterAfterDate != null && record.dateutc <= filterAfterDate) {
+        return []; // Skip this record
+      }
+      return [{ index: { _index: targetAlias } }, record]
     });
   });
+
+  if (logger && filterAfterDate != null) {
+    const recordCount = dataReadyForBulkIndexing.length / 2; // Each record has 2 entries (action + doc)
+    logger.logInfo(`[prepareDataForBulkIndexing] Filtered to ${recordCount} ${dataType} records newer than ${new Date(filterAfterDate).toISOString()}`);
+  }
+
   return dataReadyForBulkIndexing;
 }
 

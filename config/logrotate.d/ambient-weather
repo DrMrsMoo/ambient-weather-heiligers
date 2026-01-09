@@ -1,0 +1,36 @@
+# Logrotate configuration for ambient-weather-heiligers (Linux/Pi)
+#
+# Install by copying to /etc/logrotate.d/ambient-weather:
+#   sudo cp config/logrotate.d/ambient-weather /etc/logrotate.d/
+#
+# Or run manually:
+#   logrotate -f config/logrotate.d/ambient-weather
+
+# Update the path below to match your installation
+/home/pi/ambient-weather-heiligers/logs/*.log {
+    # Rotate weekly
+    weekly
+
+    # Keep 4 weeks of logs
+    rotate 4
+
+    # Compress old logs
+    compress
+    delaycompress
+
+    # Don't error if log file is missing
+    missingok
+
+    # Don't rotate if empty
+    notifempty
+
+    # Create new log file after rotation
+    create 0644 pi pi
+
+    # Add date extension to rotated files
+    dateext
+    dateformat -%Y%m%d
+
+    # Run once for all matching files
+    sharedscripts
+}
