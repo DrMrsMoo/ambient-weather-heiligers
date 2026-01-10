@@ -27,7 +27,6 @@
  * The backfill script should be run periodically to detect and fill any gaps.
  */
 
-require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { createEsClient } = require('../src/dataIndexers/esClient');
