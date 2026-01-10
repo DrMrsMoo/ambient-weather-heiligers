@@ -57,7 +57,7 @@ const { runBackfill } = require('./backfill');
 const { createEsClient } = require('../dataIndexers/esClient');
 const { searchDocsByDateRange } = require('../dataIndexers/esClientMethods');
 const IndexData = require('../dataIndexers');
-const FetchRawData = require('../dataFetchers');
+
 const fs = require('file-system');
 const readlineSync = require('readline-sync');
 
@@ -349,7 +349,7 @@ describe('backfill', () => {
       fs.readFileSync.mockReturnValue(JSON.stringify(testRecords));
       fs.existsSync.mockReturnValue(true);
 
-      const result = await runBackfill({
+      await runBackfill({
         prod: true,
         from: '2024-01-15',
         to: '2024-01-20',

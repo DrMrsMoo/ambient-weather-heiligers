@@ -149,7 +149,7 @@ describe('main', () => {
   });
 
   describe('indexing', () => {
-    it('indexes to both clusters when data is available', async () => {
+    it('indexes to both clusters when data is available and both clusters are available', async () => {
       mockGetDataForDateRanges.mockResolvedValue({
         dataFetchForDates: [{ from: 1704067200000, to: 1704153600000 }],
         dataFileNames: ['test_file']
