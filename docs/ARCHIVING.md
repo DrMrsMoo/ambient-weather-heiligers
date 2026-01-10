@@ -16,17 +16,15 @@ The project includes automated archiving to move old data files and rotated logs
 
 ### 1. Configure Archive Destination
 
-Set the `ARCHIVE_PATH` environment variable to your archive location:
+Add `ARCHIVE_PATH` to your `.env` file in the project directory:
 
 ```bash
-# Mac
-export ARCHIVE_PATH=/Volumes/ExternalDrive/weather-archive
+# Mac example
+export ARCHIVE_PATH=/Users/tina/Archives/weather-archive
 
-# Pi
+# Pi example
 export ARCHIVE_PATH=/mnt/nas/weather-archive
 ```
-
-Add this to your `.bashrc` or environment file for persistence.
 
 ### 2. Test Archive Scripts
 
@@ -40,16 +38,39 @@ npm run archive-data:dry-run
 npm run archive-logs:dry-run
 ```
 
-### 3. Schedule via Cron
+### 3. Schedule Archiving
+
+#### Mac (launchd)
+
+Install the launchd plists:
+
+```bash
+# Copy plists to LaunchAgents
+cp com.heiligers.ambient-weather-archive-data.plist ~/Library/LaunchAgents/
+cp com.heiligers.ambient-weather-archive-logs.plist ~/Library/LaunchAgents/
+
+# Load the jobs
+launchctl load ~/Library/LaunchAgents/com.heiligers.ambient-weather-archive-data.plist
+launchctl load ~/Library/LaunchAgents/com.heiligers.ambient-weather-archive-logs.plist
+
+# Verify they're loaded
+launchctl list | grep ambient-weather
+```
+
+Schedule:
+- **Data archiving**: Monthly on the 1st at 2:00 AM
+- **Log archiving**: Weekly on Sunday at 3:00 AM
+
+#### Pi (cron)
 
 Add to your crontab (`crontab -e`):
 
 ```bash
 # Archive data monthly (1st of month at 2am)
-0 2 1 * * cd /path/to/ambient-weather-heiligers && npm run archive-data >> logs/archive.log 2>&1
+0 2 1 * * cd /home/pi/Projects/ambient-weather-heiligers && npm run archive-data >> logs/archive-data.log 2>&1
 
 # Archive logs weekly (Sunday at 3am, after log rotation)
-0 3 * * 0 cd /path/to/ambient-weather-heiligers && npm run archive-logs >> logs/archive.log 2>&1
+0 3 * * 0 cd /home/pi/Projects/ambient-weather-heiligers && npm run archive-logs >> logs/archive-logs.log 2>&1
 ```
 
 ## Data Archiving
@@ -143,55 +164,41 @@ Log rotation must be configured separately for each platform. See the configurat
 
 ### Mac (newsyslog)
 
-1. **Update paths in the config file:**
-
-   Edit `config/newsyslog.d/ambient-weather.conf` and update the log paths to match your installation:
-   ```
-   /Users/YOUR_USERNAME/Projects/ambient-weather-heiligers/logs/cron.log      644  4  1000  $W0  JGN
-   /Users/YOUR_USERNAME/Projects/ambient-weather-heiligers/logs/launchd.log   644  4  500   $W0  JGN
-   ```
-
-2. **Install the configuration:**
+1. **Install the configuration:**
    ```bash
    sudo cp config/newsyslog.d/ambient-weather.conf /etc/newsyslog.d/
    ```
 
-3. **Test the configuration:**
+2. **Test the configuration:**
    ```bash
    sudo newsyslog -nv  # dry-run to verify config is valid
    ```
 
-4. **Configuration details:**
-   - Logs rotate weekly on Sunday (`$W0`)
+3. **Configuration details:**
+   - Main logs (cron.log, launchd.log, launchd-error.log): rotate weekly on Sunday (`$W0`)
+   - Archive logs (archive-data.log, archive-logs.log + error logs): rotate monthly (`$M1`)
    - Keeps 4 weeks of compressed logs (`.bz2`)
-   - Size limits: 1000KB for cron.log, 500KB for launchd.log
    - newsyslog runs daily via system launchd
 
 ### Pi (logrotate)
 
-1. **Update the log path in the config file:**
-
-   Edit `config/logrotate.d/ambient-weather` and update line 10 to match your installation:
-   ```
-   /home/YOUR_USERNAME/ambient-weather-heiligers/logs/*.log {
-   ```
-
-2. **Install the configuration:**
+1. **Install the configuration:**
    ```bash
    sudo cp config/logrotate.d/ambient-weather /etc/logrotate.d/
    ```
 
-3. **Test the configuration:**
+2. **Test the configuration:**
    ```bash
    sudo logrotate -d /etc/logrotate.d/ambient-weather  # dry-run
    sudo logrotate -f /etc/logrotate.d/ambient-weather  # force rotation
    ```
 
-4. **Configuration details:**
+3. **Configuration details:**
+   - Path: `/home/pi/Projects/ambient-weather-heiligers/logs/*.log`
    - Logs rotate weekly
    - Keeps 4 weeks of compressed logs
-   - Uses bzip2 compression
-   - Runs via `/etc/cron.daily/logrotate`
+   - Uses gzip compression with date extension
+   - Runs automatically via `/etc/cron.daily/logrotate`
 
 ## Troubleshooting
 

@@ -7,7 +7,7 @@
 #   logrotate -f config/logrotate.d/ambient-weather
 
 # Update the path below to match your installation
-/home/pi/ambient-weather-heiligers/logs/*.log {
+/home/pi/Projects/ambient-weather-heiligers/logs/*.log {
     # Rotate weekly
     weekly
 
