@@ -8,6 +8,9 @@
 
 # Update the path below to match your installation
 /home/pi/Projects/ambient-weather-heiligers/logs/*.log {
+    # Run as pi user (required for user-owned directories)
+    su pi pi
+
     # Rotate weekly
     weekly
 
