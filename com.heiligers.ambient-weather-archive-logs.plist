@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.heiligers.ambient-weather-archive-logs</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <string>source .env && ./scripts/archive-logs.sh</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <!-- Weekly on Sunday at 3:00 AM (after newsyslog rotation) -->
+        <key>Weekday</key>
+        <integer>0</integer>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/tina/Projects/ambient-weather-heiligers/logs/archive-logs.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/tina/Projects/ambient-weather-heiligers/logs/archive-logs-error.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/tina/Projects/ambient-weather-heiligers</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/tina/.nvm/versions/node/v23.5.0/bin</string>
+    </dict>
+</dict>
+</plist>

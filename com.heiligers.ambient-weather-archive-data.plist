@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.heiligers.ambient-weather-archive-data</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <string>source .env && /usr/local/bin/node scripts/archive-data.js</string>
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <!-- Monthly on the 1st at 2:00 AM -->
+        <key>Day</key>
+        <integer>1</integer>
+        <key>Hour</key>
+        <integer>2</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/tina/Projects/ambient-weather-heiligers/logs/archive-data.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/tina/Projects/ambient-weather-heiligers/logs/archive-data-error.log</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/tina/Projects/ambient-weather-heiligers</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/tina/.nvm/versions/node/v23.5.0/bin</string>
+    </dict>
+</dict>
+</plist>
