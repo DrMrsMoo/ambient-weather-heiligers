@@ -1,6 +1,6 @@
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
-const { runBackfill } = require('./src/backfill/backfill');
+const { runBackfill } = require('../src/backfill/backfill');
 
 module.exports = (async () => {
   try {

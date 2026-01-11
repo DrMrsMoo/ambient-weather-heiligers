@@ -337,12 +337,25 @@ function confirmBackfill(boundaries, clusterName, skipConfirmation = false, cont
     return true;
   }
 
-  const promptMessage = isMultiCluster
-    ? `Proceed with backfill for ${clusterName}? (y/n): `
-    : 'Proceed with backfill? (y/n): ';
-  const answer = readlineSync.question(promptMessage);
+  // Try to prompt for confirmation, but handle TTY errors gracefully
+  try {
+    const promptMessage = isMultiCluster
+      ? `Proceed with backfill for ${clusterName}? (y/n): `
+      : 'Proceed with backfill? (y/n): ';
+    const answer = readlineSync.question(promptMessage);
 
-  return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
+    return answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
+  } catch (err) {
+    // If TTY is not available, inform the user and exit
+    if (err.message && err.message.includes('TTY')) {
+      console.error('\n[ERROR] Cannot prompt for confirmation: Terminal (TTY) not available.');
+      console.error('Please use the --yes or -y flag to skip confirmation prompts.\n');
+      console.error('Example: npm run backfill -- --both --from 2026-01-11 --to 2026-01-12 --yes\n');
+      throw new Error('TTY not available. Use --yes flag to skip confirmation prompts.');
+    }
+    // Re-throw other errors
+    throw err;
+  }
 }
 
 /**
