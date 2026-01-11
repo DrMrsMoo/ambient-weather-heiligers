@@ -11,13 +11,23 @@ This guide provides step-by-step instructions for safely deploying changes to pr
 ## Quick Reference
 
 ### Current State
+
+**Mac:**
 - **Production Directory:** `/Users/tina/Projects/ambient-weather-heiligers`
+- **Cron Schedule:** 05:20 and 17:20 daily
+- **User:** tina
+
+**Raspberry Pi:**
+- **Production Directory:** `/home/pi/Projects/ambient-weather-heiligers`
+- **Cron Schedule:** 11:20 and 23:20 daily
+- **User:** pi
+
+**Both Systems:**
 - **Production Protection:** `production-current` git tag
 - **Development Branch:** `main` (safe to merge to)
 - **Latest Production Release:** Run `git describe --tags production-current`
-- **Cron Schedule:** 5:20 AM & 5:20 PM daily
 - **Cron Log:** `logs/cron.log`
-- **Cron Script:** `fetchAndIndex-production.sh` (always checks out `production-current` tag)
+- **Cron Script:** `fetchAndIndex-production.sh` (environment-aware, always checks out `production-current` tag)
 
 ---
 
@@ -309,6 +319,61 @@ This is **normal and expected**! The production script intentionally checks out 
 ### Issue: Accidental merge to main
 
 **Good news:** It doesn't matter! Since production runs from the `production-current` tag, accidental merges to `main` don't affect production. Just don't run the deployment script until you're ready.
+
+### Issue: Cron job fails with "Permission denied" on logs
+
+**Symptom:** Cron job stops working after log rotation, empty cron log
+
+**Cause:** Log rotation system (newsyslog/logrotate) created root-owned log files
+
+**Fix:**
+
+```bash
+# Mac
+sudo chown tina:admin logs/cron.log
+sudo cp config/newsyslog.d/ambient-weather.conf /etc/newsyslog.d/
+
+# Raspberry Pi
+sudo chown pi:pi logs/cron.log
+sudo cp config/logrotate.d/ambient-weather /etc/logrotate.d/
+```
+
+**Prevention:** Ensure log rotation configs specify ownership (already fixed in v1.0.1)
+
+See `docs/INCIDENT_2026-01-11_data_ingestion_failure.md` for full incident details.
+
+### Issue: Raspberry Pi - Tag fetch conflicts
+
+**Symptom:** `! [rejected] production-current -> production-current (would clobber existing tag)`
+
+**Fix:**
+
+```bash
+# Force fetch the updated tag
+git fetch --tags --force
+
+# Verify
+git log production-current --oneline -1
+```
+
+### Issue: Raspberry Pi - Environment variables missing
+
+**Symptom:** Script fails to connect to API or Elasticsearch
+
+**Fix:**
+
+```bash
+# Copy .env from Mac
+# On Mac:
+scp .env pi@raspberrypi-tina:/home/pi/Projects/ambient-weather-heiligers/.env
+
+# Or edit manually on Pi
+nano .env
+# Add all required variables (see .env.example)
+
+# Test
+bash scripts/check-pi-status.sh
+```
 
 ---
 

@@ -15,6 +15,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Updated REFACTOR_PLAN.md with epic-based approach
 
+## [1.0.1] - 2026-01-11
+
+### Added
+- Environment-aware `fetchAndIndex-production.sh` that auto-detects Mac vs Pi
+- Diagnostic script `scripts/check-pi-status.sh` for Raspberry Pi health checks
+- Incident report documentation (`INCIDENT_2026-01-11_data_ingestion_failure.md`)
+- Log file permission issue warning in CLAUDE.md "Known Issues & Gotchas"
+
+### Changed
+- `fetchAndIndex-production.sh` now uses environment detection (`$USER`, `$HOME`) instead of hardcoded paths
+- Unified cron script works on both Mac and Raspberry Pi with identical code
+- Updated `production-current` tag deployment workflow
+
+### Fixed
+- **CRITICAL:** Log rotation permission issue causing data ingestion failure
+  - newsyslog (Mac) now specifies `tina:admin` ownership in config
+  - logrotate (Pi) already had correct `create 644 pi pi` directive
+  - Prevented silent cron job failures from permission denied errors
+- Missing data directories on Raspberry Pi causing conversion errors
+- Production tag fetch conflicts between Mac and Pi
+
+### Incident Response
+- Identified and resolved 20+ hour data ingestion outage (2026-01-10 18:00 to 2026-01-11 14:45)
+- Root cause: `newsyslog` created root-owned log files, blocking cron job writes
+- Successfully recovered all missing data (250 records) to both clusters
+- Implemented preventive measures in log rotation configs
+
+### Documentation
+- Created comprehensive incident report with timeline, root cause analysis, and prevention measures
+- Updated CLAUDE.md with critical permission issue warnings and solutions
+- Added Pi diagnostic script with color-coded health checks
+
 ## [1.0.0] - 2026-01-04 (Current `main` branch state)
 
 ### Added
