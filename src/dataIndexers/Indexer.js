@@ -114,7 +114,6 @@ class IndexData {
    */
   async getMostRecentIndexedDocuments() {
     this.logger.logInfo('[getMostRecentIndexedDocuments] [START]')
-    console.log()
 
     const metricIndexToSearch = this.currentWriteIndices.filter(name => name.includes('metric'))[0];
     const imperialIndexToSearch = this.currentWriteIndices.filter(name => name.includes('imperial'))[0];
@@ -143,9 +142,6 @@ class IndexData {
     const body = payload;
     const indexName = this.#currentWriteIndices.filter(name => name.includes(dataType))[0];
     const result = await bulkIndexDocuments(this.client, indexName, body);
-    console.log('RESULT FROM BULK INDEX:', result)
-    console.log('Indexer.bulkIndexDocuments, dataType:', dataType)
-    //
     return result;
   }
 
