@@ -130,7 +130,6 @@ class FetchRawData {
    */
 
   getLastRecordedUTCDate = (allDatesFromFiles = this.allUniqueDates) => {
-    console.log('In getLastRecordedUTCDate')
     if (allDatesFromFiles.length > 0 && allDatesFromFiles.every(item => typeof item === "number")) {
       const uniqueUtcDatesArray = [...new Set(allDatesFromFiles)];
       return Math.max(...uniqueUtcDatesArray);
@@ -211,7 +210,6 @@ class FetchRawData {
 
     if (!fromDate) {
       fromDate = this.now;
-      console.log('setting fromDate to now')
     }
     fetchRawDataLogger.logInfo('[getDataForDateRanges] args: skipSave, fromDate, bypassRateLimit, clusterLatestDate', { skipSave: !!skipSave, fromDate: fromDate, bypassRateLimit: !!bypassRateLimit, clusterLatestDate: clusterLatestDate });
 

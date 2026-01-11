@@ -279,9 +279,7 @@ async function bulkIndexDocuments(client = require('./esClient'), indexName, pay
         })
       }
     })
-    console.log('bulk index erroredDocuments:', erroredDocuments)
   }
-  // console.log('number of docs without errors:', payload.length() - erroredDocuments.length())
   const { body: count } = await client.count({ index: indexName })
   return { indexCounts: count, erroredDocuments }
 }

@@ -315,20 +315,25 @@ function confirmBackfill(boundaries, clusterName, skipConfirmation = false, cont
   const { clusterIndex, totalClusters } = context;
   const isMultiCluster = totalClusters && totalClusters > 1;
 
-  console.log('\n========================================');
-  if (isMultiCluster) {
-    console.log(`Gap found in ${clusterName} cluster (${clusterIndex} of ${totalClusters}):`);
-  } else {
-    console.log(`Gap found in ${clusterName} cluster:`);
+  if (process.env.NODE_ENV !== 'test') {
+    console.log('\n========================================');
+    if (isMultiCluster) {
+      console.log(`Gap found in ${clusterName} cluster (${clusterIndex} of ${totalClusters}):`);
+    } else {
+      console.log(`Gap found in ${clusterName} cluster:`);
+    }
+    console.log('========================================');
+    console.log(`Last document before gap: ${boundaries.startFormatted}`);
+    console.log(`First document after gap: ${boundaries.endFormatted}`);
+    console.log(`Gap duration: ${boundaries.durationHours} hours (${boundaries.durationDays} days)`);
+    console.log('========================================\n');
+
+    if (skipConfirmation) {
+      console.log('Auto-confirming (--yes flag provided)...\n');
+    }
   }
-  console.log('========================================');
-  console.log(`Last document before gap: ${boundaries.startFormatted}`);
-  console.log(`First document after gap: ${boundaries.endFormatted}`);
-  console.log(`Gap duration: ${boundaries.durationHours} hours (${boundaries.durationDays} days)`);
-  console.log('========================================\n');
 
   if (skipConfirmation) {
-    console.log('Auto-confirming (--yes flag provided)...\n');
     return true;
   }
 

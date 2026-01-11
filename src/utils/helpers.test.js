@@ -31,7 +31,6 @@ describe("helpers", () => {
       const dateTime2 = momentTZ('2020-06-01');
       const expected = 24 * 60;
       const actual = calcMinutesDiff(dateTime1, dateTime2);
-      console.log(actual)
       expect(actual).toEqual(expected);
     });
     it("calculates the difference between two dates as date-time milliseconds since the unix epoch in minutes", () => {
