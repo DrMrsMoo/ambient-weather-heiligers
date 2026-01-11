@@ -51,9 +51,7 @@ describe('esClientMethods', () => {
     it('throws when ping fails (pingResult is undefined)', async () => {
       mockClient.ping.mockRejectedValue(new Error('Connection refused'));
 
-      // Note: Current implementation has a bug - tries to access body on undefined
-      // This test documents the current behavior
-      await expect(pingCluster(mockClient)).rejects.toThrow();
+      await expect(pingCluster(mockClient)).rejects.toThrow('Connection refused');
     });
   });
 
@@ -174,7 +172,7 @@ describe('esClientMethods', () => {
       }));
     });
 
-    it('throws when index does not exist (bug: tries to access body on undefined)', async () => {
+    it('returns undefined when index does not exist', async () => {
       // The indexDoesNotExist function requires a ResponseError with specific properties
       const { errors } = require('@elastic/elasticsearch');
       const notFoundError = new errors.ResponseError({
@@ -188,10 +186,8 @@ describe('esClientMethods', () => {
 
       mockClient.indices.delete.mockRejectedValue(notFoundError);
 
-      // Note: Current implementation has a bug - catches the error but then
-      // tries to access deleteResult.body when deleteResult is undefined
-      // This test documents the current behavior
-      await expect(deleteIndex(mockClient, 'nonexistent_index')).rejects.toThrow();
+      const result = await deleteIndex(mockClient, 'nonexistent_index');
+      expect(result).toBeUndefined();
     });
 
     it('throws on unexpected errors', async () => {

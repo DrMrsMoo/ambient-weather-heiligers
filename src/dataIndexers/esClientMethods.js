@@ -33,6 +33,7 @@ async function pingCluster(client = esClient) {
     pingResult = await client.ping();
   } catch (err) {
     esClientLogger.logError('[pingCluster] [ERROR]', err);
+    throw err;
   }
   return pingResult.body;
 }
@@ -156,6 +157,7 @@ async function deleteIndex(client = require('./esClient'), indexName) {
   } catch (err) {
     if (indexDoesNotExist(err)) {
       esClientLogger.logInfo('[deleteIndex] [INFO] index does not exist', err)
+      return undefined;
     } else {
       esClientLogger.logError('[deleteIndex] [ERROR]', err)
       throw new Error('unhandled exception error from deleteIndex', err)

@@ -8,7 +8,7 @@ const currentMetricIndex = dataIndexer.initialize()
   .catch(err => console.error('dataIndexer.getActiveWriteIndices error', err))
 
 
-// ultimately, I want to involke this with:
+// ultimately, I want to invoke this with:
 // dataIndexer.indexNewData();
 
 

@@ -141,7 +141,6 @@ async function main() {
     // 4th param (fetchFromDate): cluster-based reference date to prevent duplicates
     // when multiple machines run cron jobs. Falls back to local files if null.
     const getNewDataPromiseResult = await fetchRawDataTester.getDataForDateRanges(false, undefined, false, fetchFromDate);
-    console.log('getNewDataPromiseResult', getNewDataPromiseResult)
     // Check if result is the "too early" string
     if (getNewDataPromiseResult === 'too early') {
       // advance steps and log
