@@ -389,20 +389,45 @@ GET ambient_weather_heiligers_imperial_*/_search
 
 ## Known Issues & Gotchas
 
-### 1. Empty Data Directory
+### 1. Log File Permission Issues (CRITICAL)
+**Problem:** Log rotation systems (newsyslog on Mac, logrotate on Pi) can create log files with root ownership, causing cron jobs to fail silently with "Permission denied".
+
+**Symptoms:**
+- Cron jobs stop working after log rotation
+- No new data indexed to clusters
+- Log file shows "Permission denied" or is owned by root
+
+**Solution:**
+```bash
+# Mac (newsyslog)
+sudo chown tina:admin logs/cron.log
+sudo cp config/newsyslog.d/ambient-weather.conf /etc/newsyslog.d/
+
+# Raspberry Pi (logrotate)
+sudo chown pi:pi logs/cron.log
+sudo cp config/logrotate.d/ambient-weather /etc/logrotate.d/
+```
+
+**Prevention:** Ensure log rotation configs specify ownership:
+- Mac: `tina:admin 644` in newsyslog.conf
+- Pi: `create 644 pi pi` in logrotate config
+
+See `INCIDENT_2026-01-11_data_ingestion_failure.md` for full incident details.
+
+### 2. Empty Data Directory
 If `data/ambient-weather-heiligers-imperial` doesn't exist, the app will crash.
 **Solution:** Create required directories:
 ```bash
 mkdir -p data/ambient-weather-heiligers-{imperial,metric,imperial-jsonl,metric-jsonl}
 ```
 
-### 2. API Rate Limits
+### 3. API Rate Limits
 Ambient Weather API has rate limits. If running multiple fetches, space them out.
 
-### 3. First Run on New Cluster
+### 4. First Run on New Cluster
 First run on a new/empty cluster will fail to find recent documents. This is expected behavior and will self-resolve after first successful indexing.
 
-### 4. Duplicate Data
+### 5. Duplicate Data
 The Ambient Weather API counts backwards in time, which can cause duplicates. This is handled by deduplication during reindexing operations (see README.md).
 
 ---
