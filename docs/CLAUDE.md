@@ -385,6 +385,45 @@ GET ambient_weather_heiligers_imperial_*/_search
 }
 ```
 
+### Raspberry Pi Health Check
+
+Run the diagnostic script to check Pi system health:
+
+```bash
+# On the Raspberry Pi
+cd /home/pi/Projects/ambient-weather-heiligers
+bash scripts/check-pi-status.sh
+```
+
+The script checks:
+- ✅ Git repository status and production tag version
+- ✅ Log file permissions (detects root ownership issues)
+- ✅ Recent data files and timestamps
+- ✅ Cron job configuration
+- ✅ Logrotate installation and configuration
+- ✅ Environment variables
+- ✅ Recent cron executions
+
+Output is color-coded:
+- 🟢 Green (✓) - Everything working
+- 🔴 Red (✗) - Issue found, requires action
+- 🟡 Yellow (⚠) - Warning, may need attention
+
+The script provides actionable recommendations for any issues found.
+
+### Manual Testing on Pi
+
+```bash
+# Test the production script manually
+bash fetchAndIndex-production.sh
+
+# Check logs
+tail -50 logs/cron.log
+
+# Verify data was created
+ls -lht data/ambient-weather-heiligers-imperial-jsonl/ | head -5
+```
+
 ---
 
 ## Known Issues & Gotchas
@@ -481,7 +520,15 @@ Progress is tracked in REFACTOR_PLAN.md with detailed checklists for each epic.
 
 ## Version History
 
-- **v1.0.0** (Jan 2026) - Dual-cluster indexing support
+- **v1.0.1** (Jan 11, 2026) - Log rotation fixes and environment-aware deployment
+  - **CRITICAL FIX:** Resolved log file permission issues causing data ingestion failure
+  - Environment-aware `fetchAndIndex-production.sh` (auto-detects Mac vs Pi)
+  - Raspberry Pi diagnostic script (`scripts/check-pi-status.sh`)
+  - Updated newsyslog config with ownership specification
+  - Incident report and preventive documentation
+  - 20+ hour data gap successfully recovered
+
+- **v1.0.0** (Jan 4, 2026) - Dual-cluster indexing support
   - Factory pattern for ES client
   - Parallel indexing to production and staging
   - Independent error handling with Promise.allSettled
@@ -499,7 +546,8 @@ Progress is tracked in REFACTOR_PLAN.md with detailed checklists for each epic.
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes
 - **[README.md](../README.md)** - Project overview and usage instructions
 - **[scripts/README.md](../scripts/README.md)** - Documentation for all utility scripts
+- **[INCIDENT_2026-01-11_data_ingestion_failure.md](INCIDENT_2026-01-11_data_ingestion_failure.md)** - Log rotation permission incident report
 
 ---
 
-*Last updated: January 11, 2026*
+*Last updated: January 11, 2026 - v1.0.1*
