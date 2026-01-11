@@ -1,5 +1,40 @@
 const { Client } = require('@elastic/elasticsearch');
 
+// Show help menu if requested
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log(`
+Check Production Gaps
+
+Usage:
+  npm run check-prod-gaps
+
+Description:
+  Checks the production Elasticsearch cluster for gaps in weather data over the last 7 days.
+
+  The script will:
+  - Retrieve all documents from the last 7 days
+  - Identify gaps larger than 10 minutes between consecutive readings
+  - Calculate missing records (expected interval: 5 minutes)
+  - Display coverage statistics
+
+Output:
+  - List of all gaps with timestamps and durations
+  - Total gap duration and missing record count
+  - Data coverage percentage
+
+Options:
+  -h, --help     Show this help menu
+
+Examples:
+  npm run check-prod-gaps
+
+Related Commands:
+  npm run check-staging-gaps           Check staging cluster gaps
+  npm run backfill -- [options]        Backfill missing data
+`);
+  process.exit(0);
+}
+
 async function checkProductionGaps() {
   const client = new Client({
     cloud: { id: process.env.ES_CLOUD_ID },
