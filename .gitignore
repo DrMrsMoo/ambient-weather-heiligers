@@ -9,5 +9,5 @@ data_archive/*
 crontab.txt
 pi-README.txt
 *.log
-
+logs/*
 data-archive-all.zip
