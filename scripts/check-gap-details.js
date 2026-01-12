@@ -1,5 +1,50 @@
 const { Client } = require('@elastic/elasticsearch');
 
+// Show help menu if requested
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log(`
+Check Gap Details
+
+Usage:
+  npm run check-gap-details
+
+Description:
+  Performs detailed analysis of a specific data gap in the staging cluster.
+  This script examines the boundaries around a gap to understand exactly
+  what data is missing and where the gap starts and ends.
+
+  The script will:
+  - Check Period 1: a boundary period immediately before the suspected gap
+  - Check Period 2: the primary gap period under investigation
+  - Calculate expected vs actual record counts
+  - Show the last document before the gap
+  - Show the first document after the gap
+  - Report status for each period (HAS DATA / MISSING DATA)
+
+  Expected data frequency: 5-minute intervals (12 records per hour)
+
+Output:
+  - Document count for Period 1 with expected records
+  - Document count for Period 2 with expected records
+  - Status indicators for each period
+  - Timestamp of last document before the gap
+  - Timestamp of first document after the gap
+
+Options:
+  -h, --help     Show this help menu
+
+Examples:
+  npm run check-gap-details
+
+Related Commands:
+  npm run check-staging-gaps           Check staging cluster gaps
+  npm run check-prod-gaps              Check production cluster gaps
+  npm run compare-clusters             Compare production vs staging
+  npm run verify-backfill              Verify backfilled data
+`);
+  process.exit(0);
+}
+
 async function checkGapDetails() {
   const client = new Client({
     cloud: { id: process.env.STAGING_CLOUD_ID },

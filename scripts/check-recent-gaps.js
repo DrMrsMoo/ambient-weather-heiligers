@@ -1,5 +1,40 @@
 const { Client } = require('@elastic/elasticsearch');
 
+// Show help menu if requested
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log(`
+Check Recent Gaps (Staging Cluster)
+
+Usage:
+  npm run check-staging-gaps
+
+Description:
+  Checks the staging Elasticsearch cluster for gaps in weather data over the last 7 days.
+
+  The script will:
+  - Retrieve all documents from the last 7 days
+  - Identify gaps larger than 10 minutes between consecutive readings
+  - Calculate missing records (expected interval: 5 minutes)
+  - Display coverage statistics
+
+Output:
+  - List of all gaps with timestamps and durations
+  - Total gap duration and missing record count
+  - Data coverage percentage
+
+Options:
+  -h, --help     Show this help menu
+
+Examples:
+  npm run check-staging-gaps
+
+Related Commands:
+  npm run check-prod-gaps              Check production cluster gaps
+  npm run backfill -- [options]        Backfill missing data
+`);
+  process.exit(0);
+}
+
 async function checkRecentGaps() {
   const client = new Client({
     cloud: { id: process.env.STAGING_CLOUD_ID },

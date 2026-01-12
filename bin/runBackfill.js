@@ -1,11 +1,14 @@
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
-const { runBackfill } = require('./src/backfill/backfill');
+const { runBackfill } = require('../src/backfill/backfill');
 
 module.exports = (async () => {
   try {
     // Parse CLI arguments
     const argv = yargs(hideBin(process.argv))
+      .scriptName('npm run backfill --')
+      .usage('Usage: $0 [options]')
+      .version(false)
       .option('prod', {
         type: 'boolean',
         description: 'Target production cluster only',
@@ -52,7 +55,21 @@ module.exports = (async () => {
       .example('$0 --prod --from 2025-12-29 --to 2026-01-01', 'Backfill production cluster only')
       .example('$0 --both --from 2025-12-29 --to 2026-01-01', 'Backfill both clusters with independent gap detection')
       .example('$0 --both --from 2025-12-29 --to 2026-01-01 --yes', 'Backfill both clusters without confirmation prompts')
+      .epilogue(`
+Description:
+  Backfills missing weather data into Elasticsearch clusters. The script will:
+  1. Detect data gaps in the specified date range
+  2. Try to load data from local files first
+  3. Fall back to fetching from Ambient Weather API if needed
+  4. Index both imperial and metric versions of the data
+
+Notes:
+  - Use --yes flag in automated environments (CI/CD, scripts)
+  - The script will show gap details before proceeding
+  - Data is sourced from local files when available to avoid API limits
+      `)
       .help()
+      .alias('help', 'h')
       .argv;
 
     const result = await runBackfill(argv);

@@ -1,6 +1,58 @@
 const { Client } = require('@elastic/elasticsearch');
 const fs = require('fs');
 
+// Show help menu if requested
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log(`
+Analyze Data
+
+Usage:
+  npm run analyze-data
+
+Description:
+  Performs detailed analysis of weather data in the staging cluster and
+  compares it against local data files. This script helps verify data
+  integrity and coverage across different time periods.
+
+  The script will:
+  - Query staging cluster for documents in specific date periods
+  - Calculate expected record counts based on 5-minute intervals
+  - Display coverage percentage for each period
+  - List all local JSON data files
+  - Show record counts and timestamp ranges for each file
+  - Calculate total records across all local files
+
+  Analysis periods (example configuration):
+  - First day (partial, 17:00-00:00)
+  - Second day (full day)
+  - Third day (full day)
+  - Fourth day (partial, 00:00-17:00)
+
+  Note: Actual periods analyzed are configured in the script code.
+
+Output:
+  - Document counts per period in staging cluster
+  - Expected vs actual record counts
+  - Coverage percentage for each period
+  - List of local JSON files with metadata
+  - Timestamp ranges for each file
+  - Total records across all files
+
+Options:
+  -h, --help     Show this help menu
+
+Examples:
+  npm run analyze-data
+
+Related Commands:
+  npm run verify-backfill              Verify backfilled data
+  npm run check-staging-gaps           Check staging cluster gaps
+  npm run check-duplicates             Check for duplicate records
+  npm run check-gap-details            Detailed gap analysis
+`);
+  process.exit(0);
+}
+
 async function analyzeData() {
   const client = new Client({
     cloud: { id: process.env.STAGING_CLOUD_ID },
