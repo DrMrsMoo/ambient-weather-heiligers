@@ -1,5 +1,47 @@
 const { Client } = require('@elastic/elasticsearch');
 
+// Show help menu if requested
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log(`
+Compare Clusters
+
+Usage:
+  npm run compare-clusters
+
+Description:
+  Compares data between production and staging Elasticsearch clusters for
+  a specific time period. This is useful for identifying data gaps and
+  verifying that data exists in production that could be copied to staging.
+
+  The script will:
+  - Query both production and staging clusters for data in a specified period
+  - Display document counts for each cluster
+  - Show whether each cluster has data for the period
+  - Display sample documents from production if data exists
+  - Indicate if production data could be copied to staging
+
+Output:
+  - Document count for production cluster in the time period
+  - Document count for staging cluster in the same period
+  - Status indicator showing which clusters have data
+  - Sample documents from production (first 5)
+  - Recommendation on whether production data could fill staging gaps
+
+Options:
+  -h, --help     Show this help menu
+
+Examples:
+  npm run compare-clusters
+
+Related Commands:
+  npm run check-prod-gaps              Check production cluster gaps
+  npm run check-staging-gaps           Check staging cluster gaps
+  npm run copy-prod-to-staging         Copy production data to staging
+  npm run verify-backfill              Verify backfilled data
+`);
+  process.exit(0);
+}
+
 async function compareClusters() {
   const prodClient = new Client({
     cloud: { id: process.env.ES_CLOUD_ID },

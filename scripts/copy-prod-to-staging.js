@@ -1,3 +1,53 @@
+// Show help menu if requested
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log(`
+Copy Production to Staging
+
+Usage:
+  npm run copy-prod-to-staging
+
+Description:
+  Copies data from the production Elasticsearch cluster to the staging cluster
+  for a specific time period. This is useful for filling gaps in staging with
+  verified production data.
+
+  The script will:
+  - Export data from production cluster for a specified date range
+  - Save the data to local JSON and JSONL files
+  - Convert imperial data to metric format
+  - Initialize the staging cluster indexer
+  - Index both imperial and metric data to staging
+  - Verify that the gap has been filled
+
+  Data is saved to the following locations:
+  - data/ambient-weather-heiligers-imperial/{fromEpoch}_{toEpoch}.json
+  - data/ambient-weather-heiligers-imperial-jsonl/{fromEpoch}_{toEpoch}.jsonl
+  - data/ambient-weather-heiligers-metric-jsonl/{fromEpoch}_{toEpoch}.jsonl
+
+Output:
+  - Export status and document count from production
+  - Local file save confirmation
+  - Staging indexer initialization status
+  - Imperial indexing results (document count, errors)
+  - Metric indexing results (document count, errors)
+  - Verification status showing gap is filled
+  - Summary of the entire operation
+
+Options:
+  -h, --help     Show this help menu
+
+Examples:
+  npm run copy-prod-to-staging
+
+Related Commands:
+  npm run compare-clusters             Compare production vs staging
+  npm run verify-backfill              Verify backfilled data
+  npm run check-staging-gaps           Check staging cluster gaps
+  npm run manual-index -- [files]      Manually index specific files
+`);
+  process.exit(0);
+}
+
 const { Client } = require('@elastic/elasticsearch');
 const fs = require('file-system');
 const { convertToMetric } = require('./src/utils');

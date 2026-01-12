@@ -7,6 +7,64 @@ const path = require('path');
 
 const manualLogger = new Logger('[manual-index]');
 
+// Show help menu if requested
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log(`
+Manual Index
+
+Usage:
+  npm run manual-index
+  npm run manual-index -- [number_of_files]
+
+Description:
+  Manually indexes weather data from local JSONL files to both production
+  and staging Elasticsearch clusters. This is useful for backfilling data
+  or reindexing specific files.
+
+  The script will:
+  - Scan the data/ambient-weather-heiligers-imperial-jsonl directory
+  - Find all .jsonl files (or the N most recent if specified)
+  - Prepare both imperial and metric data for indexing
+  - Index data to production cluster
+  - Index data to staging cluster
+  - Report indexing results and error counts
+
+  Data is read from:
+  - data/ambient-weather-heiligers-imperial-jsonl/*.jsonl
+  - data/ambient-weather-heiligers-metric-jsonl/*.jsonl
+
+Arguments:
+  [number_of_files]    Optional. Number of most recent files to index.
+                       If omitted, all files are indexed.
+                       Files are sorted by filename (timestamp-based).
+
+Output:
+  For each cluster (Production and Staging):
+  - Connection status
+  - Current latest imperial and metric timestamps
+  - Imperial data preparation status
+  - Imperial indexing results (total docs, errors)
+  - Metric data preparation status
+  - Metric indexing results (total docs, errors)
+  - Completion status
+
+Options:
+  -h, --help     Show this help menu
+
+Examples:
+  npm run manual-index              # Index all JSONL files
+  npm run manual-index -- 5         # Index 5 most recent files
+  npm run manual-index -- 1         # Index only the most recent file
+
+Related Commands:
+  npm run verify-indexing              Verify indexing status
+  npm run copy-prod-to-staging         Copy production data to staging
+  npm run check-staging-gaps           Check staging cluster gaps
+  npm run check-prod-gaps              Check production cluster gaps
+`);
+  process.exit(0);
+}
+
 /**
  * Get all JSONL files from the data directory
  * @param {number} limit - Number of most recent files to return (0 = all files)

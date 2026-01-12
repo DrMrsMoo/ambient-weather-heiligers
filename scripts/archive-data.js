@@ -35,6 +35,83 @@ const Logger = require('../src/logger');
 
 const logger = new Logger('[archive-data]');
 
+// Show help menu if requested
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log(`
+Archive Data
+
+Usage:
+  npm run archive-data [-- [--dry-run] [--days N]]
+
+Description:
+  Archives local weather data files to an external location after verifying
+  that the data has been successfully indexed to both production and staging
+  Elasticsearch clusters.
+
+  This is a safety mechanism to prevent data loss - files are only archived
+  if their data is confirmed to exist in both clusters.
+
+  The script will:
+  - Connect to production and staging clusters
+  - Query for the latest indexed date in each cluster
+  - Determine the safe archive date (minimum of both clusters)
+  - Find local files with all data older than the retention period
+  - Verify files are safe to archive (indexed in both clusters)
+  - Move files to ARCHIVE_PATH/data/{type}/{year}/{month}/
+  - Report summary of archived files
+
+  Files are organized in the archive by:
+  - Type: imperial, imperial-jsonl, metric-jsonl
+  - Year: YYYY
+  - Month: MM
+
+Arguments:
+  --dry-run       Show what would be archived without moving files
+  --days N        Archive files older than N days (default: 7)
+
+Environment Variables:
+  ARCHIVE_PATH    Required. Destination directory for archived files.
+                  Example: export ARCHIVE_PATH=/Volumes/ExternalDrive/weather-archive
+
+Data Directories:
+  - data/ambient-weather-heiligers-imperial/*.json
+  - data/ambient-weather-heiligers-imperial-jsonl/*.jsonl
+  - data/ambient-weather-heiligers-metric-jsonl/*.jsonl
+
+Output:
+  - Retention period and cutoff date
+  - Cluster connection status
+  - Latest indexed dates from production and staging
+  - Safe archive date (minimum of both clusters)
+  - List of files eligible for archiving
+  - Archive operation status for each file set
+  - Summary (total archived, errors)
+
+Options:
+  -h, --help     Show this help menu
+
+Examples:
+  npm run archive-data                        # Archive files older than 7 days
+  npm run archive-data -- --dry-run           # Preview what would be archived
+  npm run archive-data -- --days 14           # Archive files older than 14 days
+  npm run archive-data -- --dry-run --days 30 # Preview 30-day archive
+
+IMPORTANT NOTES:
+  - Files are only archived if data exists in BOTH production and staging
+  - This script verifies the latest indexed date but does NOT verify every
+    individual record. Run backfill scripts to ensure complete data coverage.
+  - The ARCHIVE_PATH must be accessible (e.g., external drive must be mounted)
+  - Original files are moved (not copied) to save disk space
+
+Related Commands:
+  npm run verify-indexing              Verify indexing status
+  npm run check-prod-gaps              Check production cluster gaps
+  npm run check-staging-gaps           Check staging cluster gaps
+  npm run backfill -- [options]        Backfill missing data
+`);
+  process.exit(0);
+}
+
 // Constants
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DEFAULT_RETENTION_DAYS = 7;

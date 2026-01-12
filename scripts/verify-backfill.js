@@ -1,5 +1,49 @@
 const { Client } = require('@elastic/elasticsearch');
 
+// Show help menu if requested
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log(`
+Verify Backfill
+
+Usage:
+  npm run verify-backfill
+
+Description:
+  Verifies that backfilled data has been properly indexed to the staging
+  Elasticsearch cluster. This script checks data in a specific date range
+  to confirm the backfill operation was successful.
+
+  The script will:
+  - Display active write indices in the staging cluster
+  - Query imperial and metric data within the backfilled date range
+  - Show document counts and timestamp ranges
+  - Display sample documents to verify content
+  - Calculate data coverage and compare against expected records
+  - Verify data matches the manually created files
+
+Output:
+  - Active write indices information
+  - Document counts for imperial and metric data
+  - Earliest and latest timestamps in the range
+  - Sample documents with temperature and humidity data
+  - Gap analysis with coverage percentage
+  - Manual file range verification
+
+Options:
+  -h, --help     Show this help menu
+
+Examples:
+  npm run verify-backfill
+
+Related Commands:
+  npm run backfill -- [options]        Backfill missing data
+  npm run check-staging-gaps           Check staging cluster gaps
+  npm run check-prod-gaps              Check production cluster gaps
+  npm run compare-clusters             Compare production vs staging data
+`);
+  process.exit(0);
+}
+
 async function verifyBackfill() {
   // Create staging client
   const client = new Client({
