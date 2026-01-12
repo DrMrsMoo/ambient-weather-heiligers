@@ -22,11 +22,13 @@ Description:
   - Show record counts and timestamp ranges for each file
   - Calculate total records across all local files
 
-  Analysis periods:
-  - Dec 28 (partial, 17:00-00:00)
-  - Dec 29 (full day)
-  - Dec 30 (full day)
-  - Dec 31 (partial, 00:00-17:00)
+  Analysis periods (example configuration):
+  - First day (partial, 17:00-00:00)
+  - Second day (full day)
+  - Third day (full day)
+  - Fourth day (partial, 00:00-17:00)
+
+  Note: Actual periods analyzed are configured in the script code.
 
 Output:
   - Document counts per period in staging cluster

@@ -20,8 +20,8 @@ Description:
   - Show the top 5 most duplicated timestamps
   - Report total unique timestamps and how many have duplicates
 
-  Sample timestamp checked: Dec 29, 2025 at 12:00 UTC
-  Date range for aggregation: Dec 29, 2025 (full day)
+  Sample timestamp checked: Example UTC timestamp (e.g., a recent hourly reading)
+  Date range for aggregation: 24-hour window around the sample timestamp
 
 Output:
   - Number of documents found for the sample timestamp

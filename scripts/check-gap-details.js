@@ -14,8 +14,8 @@ Description:
   what data is missing and where the gap starts and ends.
 
   The script will:
-  - Check Period 1: Dec 31 17:00 to Jan 1 00:00
-  - Check Period 2: Jan 1 00:00 to Jan 2 01:30 (the primary gap)
+  - Check Period 1: a boundary period immediately before the suspected gap
+  - Check Period 2: the primary gap period under investigation
   - Calculate expected vs actual record counts
   - Show the last document before the gap
   - Show the first document after the gap

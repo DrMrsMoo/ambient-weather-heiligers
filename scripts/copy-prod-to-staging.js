@@ -1,3 +1,10 @@
+const { Client } = require('@elastic/elasticsearch');
+const fs = require('file-system');
+const { convertToMetric } = require('./src/utils');
+const IndexData = require('./src/dataIndexers');
+const { prepareDataForBulkIndexing } = require('./main_utils');
+const Logger = require('./src/logger');
+
 // Show help menu if requested
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
   console.log(`
@@ -47,13 +54,6 @@ Related Commands:
 `);
   process.exit(0);
 }
-
-const { Client } = require('@elastic/elasticsearch');
-const fs = require('file-system');
-const { convertToMetric } = require('./src/utils');
-const IndexData = require('./src/dataIndexers');
-const { prepareDataForBulkIndexing } = require('./main_utils');
-const Logger = require('./src/logger');
 
 const logger = new Logger('[copy-prod-to-staging]');
 
