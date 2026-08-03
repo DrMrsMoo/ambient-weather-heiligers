@@ -90,7 +90,11 @@ async function getAllAmbientWeatherIndices(client = require('./esClient')) {
 *  }]
  */
 async function getAmbientWeatherAliases(client = require('./esClient')) {
-  let clusterAliasesResult;
+  // Initialize to [] (not undefined) so a thrown getAlias call or a non-200
+  // statusCode still returns an array. The consumer (Indexer.getActiveWriteIndices)
+  // calls .filter() on this result with no guard; returning undefined on a transient
+  // failure would throw a TypeError and silently kill the unattended cron run.
+  let clusterAliasesResult = [];
   try {
     // v8: response is flattened. Request { meta: true } to keep the statusCode gate.
     const { body, statusCode } = await client.indices.getAlias({

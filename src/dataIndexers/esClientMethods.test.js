@@ -98,7 +98,9 @@ describe('esClientMethods', () => {
       }, { meta: true });
     });
 
-    it('returns undefined on non-200 status code', async () => {
+    it('returns an empty array (not undefined) on non-200 status code', async () => {
+      // A non-200 must NOT return undefined: the consumer (getActiveWriteIndices)
+      // calls .filter() on this result unguarded, so undefined would crash the cron run.
       mockClient.indices.getAlias.mockResolvedValue({
         body: {},
         statusCode: 404
@@ -106,15 +108,17 @@ describe('esClientMethods', () => {
 
       const result = await getAmbientWeatherAliases(mockClient);
 
-      expect(result).toBeUndefined();
+      expect(result).toEqual([]);
     });
 
-    it('handles errors gracefully', async () => {
+    it('returns an empty array (not undefined) when the getAlias call throws', async () => {
+      // Same contract on a thrown transient error (network blip, 5xx, ConnectionError):
+      // return [] so getActiveWriteIndices degrades gracefully instead of throwing.
       mockClient.indices.getAlias.mockRejectedValue(new Error('Network error'));
 
       const result = await getAmbientWeatherAliases(mockClient);
 
-      expect(result).toBeUndefined();
+      expect(result).toEqual([]);
     });
   });
 

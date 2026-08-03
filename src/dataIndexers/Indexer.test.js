@@ -125,10 +125,45 @@ describe('IndexData', () => {
         'ambient_weather_heiligers_imperial_2024_01',
         'ambient_weather_heiligers_metric_2024_01'
       ]);
+      // the is_write_index:false entry must be EXCLUDED even though its alias
+      // (all-imperial) does have a write index selected.
+      expect(result).not.toContain('ambient_weather_heiligers_imperial_2023_12');
       expect(indexer.currentWriteIndices).toEqual([
         'ambient_weather_heiligers_imperial_2024_01',
         'ambient_weather_heiligers_metric_2024_01'
       ]);
+    });
+
+    it('excludes an index whose alias entry OMITS is_write_index', async () => {
+      // Older rolled-over indices can have an alias entry with no is_write_index field.
+      // getAmbientWeatherAliases defaults that to false, so it must not be selected.
+      const mockAliases = [
+        { alias: 'all-imperial', index: 'ambient_weather_heiligers_imperial_2024_01', is_write_index: true },
+        { alias: 'all-imperial', index: 'ambient_weather_heiligers_imperial_old' } // no is_write_index key
+      ];
+
+      getAmbientWeatherAliases.mockResolvedValue(mockAliases);
+
+      const result = await indexer.getActiveWriteIndices();
+
+      expect(result).toEqual(['ambient_weather_heiligers_imperial_2024_01']);
+      expect(result).not.toContain('ambient_weather_heiligers_imperial_old');
+    });
+
+    it('rejects the STRING "true" — only the strict boolean true selects a write index', async () => {
+      // Guards against a regression back to the old cat.aliases string convention.
+      // The filter is `=== true`, so a string 'true' must NOT be treated as a write index.
+      const mockAliases = [
+        { alias: 'all-imperial', index: 'ambient_weather_heiligers_imperial_stringy', is_write_index: 'true' },
+        { alias: 'all-metric', index: 'ambient_weather_heiligers_metric_2024_01', is_write_index: true }
+      ];
+
+      getAmbientWeatherAliases.mockResolvedValue(mockAliases);
+
+      const result = await indexer.getActiveWriteIndices();
+
+      expect(result).toEqual(['ambient_weather_heiligers_metric_2024_01']);
+      expect(result).not.toContain('ambient_weather_heiligers_imperial_stringy');
     });
 
     it('returns undefined when no write indices found', async () => {
