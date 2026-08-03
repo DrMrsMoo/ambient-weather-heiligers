@@ -59,6 +59,12 @@ async function verifyBackfill() {
   // 1. Check active write indices
   console.log('1. Active Write Indices:');
   // v8: cat.aliases() returns the array directly (no `.body` wrapper).
+  // NOTE: this diagnostic script intentionally uses the _cat API, which is text-based
+  // and returns `is_write_index` as the STRING 'true'/'false' — hence the `=== 'true'`
+  // comparison below. Do NOT "fix" this to `=== true`: unlike the production path
+  // (Indexer.js / getAmbientWeatherAliases, which uses indices.getAlias and gets a real
+  // boolean), cat.aliases returns strings. Changing it to a boolean check would make this
+  // silently report zero write indices.
   const aliases = await client.cat.aliases({ format: 'json' });
   const writeIndices = aliases.filter(a =>
     a.alias.includes('ambient-weather-heiligers') && a['is_write_index'] === 'true'

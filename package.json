@@ -25,6 +25,9 @@
   },
   "author": "Tina Heiligers",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@elastic/elasticsearch": "^8.19.0",
     "ambient-weather-api": "0.0.6",
