@@ -25,14 +25,16 @@ describe('esClientMethods', () => {
       },
       indices: {
         create: jest.fn(),
-        delete: jest.fn()
+        delete: jest.fn(),
+        getAlias: jest.fn()
       }
     };
   });
 
   describe('pingCluster', () => {
     it('returns true when cluster is reachable', async () => {
-      mockClient.ping.mockResolvedValue({ body: true });
+      // v8: ping() resolves to the boolean directly (no { body } wrapper).
+      mockClient.ping.mockResolvedValue(true);
 
       const result = await pingCluster(mockClient);
 
@@ -41,7 +43,7 @@ describe('esClientMethods', () => {
     });
 
     it('returns false when cluster is not reachable', async () => {
-      mockClient.ping.mockResolvedValue({ body: false });
+      mockClient.ping.mockResolvedValue(false);
 
       const result = await pingCluster(mockClient);
 
@@ -56,32 +58,49 @@ describe('esClientMethods', () => {
   });
 
   describe('getAmbientWeatherAliases', () => {
-    it('returns aliases when successful', async () => {
-      const mockAliases = [
-        { alias: 'all-ambient-weather-heiligers-imperial', index: 'ambient_weather_heiligers_imperial_2024_01', is_write_index: 'true' },
-        { alias: 'all-ambient-weather-heiligers-metric', index: 'ambient_weather_heiligers_metric_2024_01', is_write_index: 'true' }
-      ];
+    it('returns flattened alias rows (with boolean is_write_index) from the structured getAlias API', async () => {
+      // Structured indices.getAlias response is keyed by index name.
+      const structuredAliasResponse = {
+        ambient_weather_heiligers_imperial_2024_01: {
+          aliases: {
+            'all-ambient-weather-heiligers-imperial': { is_write_index: true }
+          }
+        },
+        ambient_weather_heiligers_metric_2024_01: {
+          aliases: {
+            'all-ambient-weather-heiligers-metric': { is_write_index: true }
+          }
+        },
+        // an older index whose alias entry omits is_write_index => not the write index
+        ambient_weather_heiligers_imperial_2023_12: {
+          aliases: {
+            'all-ambient-weather-heiligers-imperial': {}
+          }
+        }
+      };
 
-      mockClient.cat.aliases.mockResolvedValue({
-        body: mockAliases,
+      // v8: code requests { meta: true } so statusCode is available alongside body.
+      mockClient.indices.getAlias.mockResolvedValue({
+        body: structuredAliasResponse,
         statusCode: 200
       });
 
       const result = await getAmbientWeatherAliases(mockClient);
 
-      expect(result).toEqual(mockAliases);
-      expect(mockClient.cat.aliases).toHaveBeenCalledWith({
+      expect(result).toEqual([
+        { alias: 'all-ambient-weather-heiligers-imperial', index: 'ambient_weather_heiligers_imperial_2024_01', is_write_index: true },
+        { alias: 'all-ambient-weather-heiligers-metric', index: 'ambient_weather_heiligers_metric_2024_01', is_write_index: true },
+        { alias: 'all-ambient-weather-heiligers-imperial', index: 'ambient_weather_heiligers_imperial_2023_12', is_write_index: false }
+      ]);
+      expect(mockClient.indices.getAlias).toHaveBeenCalledWith({
         name: '*ambient-weather-heiligers-*',
-        format: 'json',
-        h: ['alias', 'index', 'is_write_index'],
-        v: true,
         expand_wildcards: 'all'
-      });
+      }, { meta: true });
     });
 
     it('returns undefined on non-200 status code', async () => {
-      mockClient.cat.aliases.mockResolvedValue({
-        body: [],
+      mockClient.indices.getAlias.mockResolvedValue({
+        body: {},
         statusCode: 404
       });
 
@@ -91,7 +110,7 @@ describe('esClientMethods', () => {
     });
 
     it('handles errors gracefully', async () => {
-      mockClient.cat.aliases.mockRejectedValue(new Error('Network error'));
+      mockClient.indices.getAlias.mockRejectedValue(new Error('Network error'));
 
       const result = await getAmbientWeatherAliases(mockClient);
 
@@ -118,10 +137,11 @@ describe('esClientMethods', () => {
       const result = await createIndex(mockClient, testIndexName, testMappings);
 
       expect(result).toEqual(mockResponse);
+      // v8: mappings are top-level (no nested `body`); ignore stays as second arg.
       expect(mockClient.indices.create).toHaveBeenCalledWith(
         {
           index: testIndexName,
-          body: { mappings: testMappings }
+          mappings: testMappings
         },
         { ignore: [400] }
       );
@@ -158,9 +178,8 @@ describe('esClientMethods', () => {
 
   describe('deleteIndex', () => {
     it('deletes index successfully', async () => {
-      mockClient.indices.delete.mockResolvedValue({
-        body: { acknowledged: true }
-      });
+      // v8: indices.delete() resolves to the response directly (no { body } wrapper).
+      mockClient.indices.delete.mockResolvedValue({ acknowledged: true });
 
       const result = await deleteIndex(mockClient, 'test_index');
 
@@ -206,9 +225,7 @@ describe('esClientMethods', () => {
         { _source: { dateutc: 1704063600000, temp: 71 } }
       ];
 
-      mockClient.search.mockResolvedValue({
-        body: { hits: { hits: mockHits } }
-      });
+      mockClient.search.mockResolvedValue({ hits: { hits: mockHits } });
 
       const result = await getMostRecentDoc(mockClient, 'test_index', {});
 
@@ -221,9 +238,7 @@ describe('esClientMethods', () => {
     });
 
     it('respects custom size option', async () => {
-      mockClient.search.mockResolvedValue({
-        body: { hits: { hits: [] } }
-      });
+      mockClient.search.mockResolvedValue({ hits: { hits: [] } });
 
       await getMostRecentDoc(mockClient, 'test_index', { size: 5 });
 
@@ -233,9 +248,7 @@ describe('esClientMethods', () => {
     });
 
     it('respects custom _source option', async () => {
-      mockClient.search.mockResolvedValue({
-        body: { hits: { hits: [] } }
-      });
+      mockClient.search.mockResolvedValue({ hits: { hits: [] } });
 
       await getMostRecentDoc(mockClient, 'test_index', { _source: ['dateutc', 'temp'] });
 
@@ -262,22 +275,19 @@ describe('esClientMethods', () => {
         { _source: { dateutc: 1704100000000, date: '2024-01-01T12:00:00Z' } }
       ];
 
-      mockClient.search.mockResolvedValue({
-        body: { hits: { hits: mockHits } }
-      });
+      mockClient.search.mockResolvedValue({ hits: { hits: mockHits } });
 
       const result = await searchDocsByDateRange(mockClient, 'test_index', startDate, endDate);
 
       expect(result).toEqual(mockHits);
+      // v8: query is top-level (no nested `body`).
       expect(mockClient.search).toHaveBeenCalledWith(expect.objectContaining({
         index: 'test_index',
-        body: {
-          query: {
-            range: {
-              dateutc: {
-                gte: startDate,
-                lte: endDate
-              }
+        query: {
+          range: {
+            dateutc: {
+              gte: startDate,
+              lte: endDate
             }
           }
         }
@@ -285,9 +295,7 @@ describe('esClientMethods', () => {
     });
 
     it('uses default options when not specified', async () => {
-      mockClient.search.mockResolvedValue({
-        body: { hits: { hits: [] } }
-      });
+      mockClient.search.mockResolvedValue({ hits: { hits: [] } });
 
       await searchDocsByDateRange(mockClient, 'test_index', startDate, endDate);
 
@@ -300,9 +308,7 @@ describe('esClientMethods', () => {
     });
 
     it('respects custom options', async () => {
-      mockClient.search.mockResolvedValue({
-        body: { hits: { hits: [] } }
-      });
+      mockClient.search.mockResolvedValue({ hits: { hits: [] } });
 
       const opts = {
         size: 100,
@@ -322,9 +328,7 @@ describe('esClientMethods', () => {
     });
 
     it('returns empty array when no documents found', async () => {
-      mockClient.search.mockResolvedValue({
-        body: { hits: { hits: [] } }
-      });
+      mockClient.search.mockResolvedValue({ hits: { hits: [] } });
 
       const result = await searchDocsByDateRange(mockClient, 'test_index', startDate, endDate);
 
@@ -340,9 +344,7 @@ describe('esClientMethods', () => {
     });
 
     it('supports wildcard index patterns', async () => {
-      mockClient.search.mockResolvedValue({
-        body: { hits: { hits: [] } }
-      });
+      mockClient.search.mockResolvedValue({ hits: { hits: [] } });
 
       await searchDocsByDateRange(mockClient, 'ambient_weather_*', startDate, endDate);
 
@@ -361,20 +363,18 @@ describe('esClientMethods', () => {
     ];
 
     it('indexes documents successfully', async () => {
-      mockClient.bulk.mockResolvedValue({
-        body: { errors: false, items: [] }
-      });
-      mockClient.count.mockResolvedValue({
-        body: { count: 2 }
-      });
+      // v8: bulk()/count() resolve to the response directly (no { body } wrapper).
+      mockClient.bulk.mockResolvedValue({ errors: false, items: [] });
+      mockClient.count.mockResolvedValue({ count: 2 });
 
       const result = await bulkIndexDocuments(mockClient, 'test_index', testPayload);
 
       expect(result.indexCounts).toEqual({ count: 2 });
       expect(result.erroredDocuments).toEqual([]);
+      // v8: bulk operations are passed via top-level `operations` (not `body`).
       expect(mockClient.bulk).toHaveBeenCalledWith({
         refresh: 'true',
-        body: testPayload
+        operations: testPayload
       });
     });
 
@@ -387,8 +387,8 @@ describe('esClientMethods', () => {
         ]
       };
 
-      mockClient.bulk.mockResolvedValue({ body: bulkResponse });
-      mockClient.count.mockResolvedValue({ body: { count: 1 } });
+      mockClient.bulk.mockResolvedValue(bulkResponse);
+      mockClient.count.mockResolvedValue({ count: 1 });
 
       const result = await bulkIndexDocuments(mockClient, 'test_index', testPayload);
 
@@ -398,12 +398,8 @@ describe('esClientMethods', () => {
     });
 
     it('returns index count after bulk operation', async () => {
-      mockClient.bulk.mockResolvedValue({
-        body: { errors: false, items: [] }
-      });
-      mockClient.count.mockResolvedValue({
-        body: { count: 1000 }
-      });
+      mockClient.bulk.mockResolvedValue({ errors: false, items: [] });
+      mockClient.count.mockResolvedValue({ count: 1000 });
 
       const result = await bulkIndexDocuments(mockClient, 'test_index', testPayload);
 
@@ -412,12 +408,8 @@ describe('esClientMethods', () => {
     });
 
     it('handles empty payload', async () => {
-      mockClient.bulk.mockResolvedValue({
-        body: { errors: false, items: [] }
-      });
-      mockClient.count.mockResolvedValue({
-        body: { count: 0 }
-      });
+      mockClient.bulk.mockResolvedValue({ errors: false, items: [] });
+      mockClient.count.mockResolvedValue({ count: 0 });
 
       const result = await bulkIndexDocuments(mockClient, 'test_index', []);
 

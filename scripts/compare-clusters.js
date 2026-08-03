@@ -67,30 +67,49 @@ async function compareClusters() {
 
   console.log('Period: Jan 1 00:00 - Jan 2 01:30 (25.5 hours)\n');
 
+  // v8: count/search params are top-level (no nested `body`); responses are flattened (no `.body`).
   // Check production
   const prodResult = await prodClient.count({
     index: 'ambient_weather_heiligers_imperial_*',
-    body: {
-      query: {
-        range: {
-          dateutc: {
-            gt: gapStart,
-            lt: gapEnd
-          }
+    query: {
+      range: {
+        dateutc: {
+          gt: gapStart,
+          lt: gapEnd
         }
       }
     }
   });
 
   console.log('PRODUCTION:');
-  console.log(`   Documents: ${prodResult.body.count}`);
-  console.log(`   Status: ${prodResult.body.count > 0 ? '✓ HAS DATA' : '✗ NO DATA'}`);
+  console.log(`   Documents: ${prodResult.count}`);
+  console.log(`   Status: ${prodResult.count > 0 ? '✓ HAS DATA' : '✗ NO DATA'}`);
   console.log();
 
   // Check staging
   const stagingResult = await stagingClient.count({
     index: 'ambient_weather_heiligers_imperial_*',
-    body: {
+    query: {
+      range: {
+        dateutc: {
+          gt: gapStart,
+          lt: gapEnd
+        }
+      }
+    }
+  });
+
+  console.log('STAGING:');
+  console.log(`   Documents: ${stagingResult.count}`);
+  console.log(`   Status: ${stagingResult.count > 0 ? '✓ HAS DATA' : '✗ NO DATA'}`);
+  console.log();
+
+  // If production has data, show sample
+  if (prodResult.count > 0) {
+    console.log('Sample documents from PRODUCTION:\n');
+
+    const sampleResult = await prodClient.search({
+      index: 'ambient_weather_heiligers_imperial_*',
       query: {
         range: {
           dateutc: {
@@ -98,37 +117,13 @@ async function compareClusters() {
             lt: gapEnd
           }
         }
-      }
-    }
-  });
-
-  console.log('STAGING:');
-  console.log(`   Documents: ${stagingResult.body.count}`);
-  console.log(`   Status: ${stagingResult.body.count > 0 ? '✓ HAS DATA' : '✗ NO DATA'}`);
-  console.log();
-
-  // If production has data, show sample
-  if (prodResult.body.count > 0) {
-    console.log('Sample documents from PRODUCTION:\n');
-
-    const sampleResult = await prodClient.search({
-      index: 'ambient_weather_heiligers_imperial_*',
-      body: {
-        query: {
-          range: {
-            dateutc: {
-              gt: gapStart,
-              lt: gapEnd
-            }
-          }
-        },
-        sort: [{ dateutc: 'asc' }],
-        size: 5,
-        _source: ['dateutc', 'date', 'tempf']
-      }
+      },
+      sort: [{ dateutc: 'asc' }],
+      size: 5,
+      _source: ['dateutc', 'date', 'tempf']
     });
 
-    sampleResult.body.hits.hits.forEach((hit, idx) => {
+    sampleResult.hits.hits.forEach((hit, idx) => {
       console.log(`   [${idx + 1}] ${hit._source.date} - Temp: ${hit._source.tempf}°F`);
     });
 

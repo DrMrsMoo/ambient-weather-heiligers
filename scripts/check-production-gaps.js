@@ -50,23 +50,22 @@ async function checkProductionGaps() {
   const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
 
   // Get all documents in the last 7 days, sorted by timestamp
+  // v8: search params are top-level (no nested `body`); response is flattened (no `.body`).
   const result = await client.search({
     index: 'ambient_weather_heiligers_imperial_*',
-    body: {
-      query: {
-        range: {
-          dateutc: {
-            gte: sevenDaysAgo
-          }
+    query: {
+      range: {
+        dateutc: {
+          gte: sevenDaysAgo
         }
-      },
-      sort: [{ dateutc: 'asc' }],
-      size: 10000, // Max 10000 docs
-      _source: ['dateutc', 'date']
-    }
+      }
+    },
+    sort: [{ dateutc: 'asc' }],
+    size: 10000, // Max 10000 docs
+    _source: ['dateutc', 'date']
   });
 
-  const docs = result.body.hits.hits.map(h => ({
+  const docs = result.hits.hits.map(h => ({
     timestamp: h._source.dateutc,
     date: h._source.date
   }));

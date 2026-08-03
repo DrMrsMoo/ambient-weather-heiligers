@@ -26,7 +26,7 @@
   "author": "Tina Heiligers",
   "license": "MIT",
   "dependencies": {
-    "@elastic/elasticsearch": "^7.16.0",
+    "@elastic/elasticsearch": "^8.19.0",
     "ambient-weather-api": "0.0.6",
     "assert": "^2.0.0",
     "convert-units": "^2.3.4",
@@ -37,9 +37,9 @@
     "yargs": "^17.7.2"
   },
   "devDependencies": {
-    "@elastic/elasticsearch-mock": "^0.3.1",
-    "jest": "^27.0.4",
-    "jest-cli": "^27.0.4",
+    "@elastic/elasticsearch-mock": "^2.1.0",
+    "jest": "^29.7.0",
+    "jest-cli": "^29.7.0",
     "jsdoc": "^3.6.7"
   }
 }

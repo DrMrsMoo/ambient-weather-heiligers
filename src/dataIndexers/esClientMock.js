@@ -1,6 +1,8 @@
-const { Client } = require('@elastic/elasticsearch')
+const { Client, errors } = require('@elastic/elasticsearch')
 const Mock = require('@elastic/elasticsearch-mock')
-const { ResponseError } = require('@elastic/elasticsearch/lib/errors')
+// v8: deep imports (e.g. @elastic/elasticsearch/lib/errors) are no longer
+// exported. Errors are exposed via the package's `errors` namespace.
+const { ResponseError } = errors
 const { match } = require('assert')
 
 

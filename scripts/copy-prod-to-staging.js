@@ -85,24 +85,23 @@ async function copyProductionToStaging() {
     logger.logInfo('Step 1: Exporting data from PRODUCTION cluster...');
     logger.logInfo(`  Date range: ${new Date(gapStart).toISOString()} to ${new Date(gapEnd).toISOString()}`);
 
+    // v8: search params are top-level (no nested `body`); response is flattened (no `.body`).
     const result = await prodClient.search({
       index: 'ambient_weather_heiligers_imperial_*',
-      body: {
-        query: {
-          range: {
-            dateutc: {
-              gt: gapStart,
-              lt: gapEnd
-            }
+      query: {
+        range: {
+          dateutc: {
+            gt: gapStart,
+            lt: gapEnd
           }
-        },
-        sort: [{ dateutc: 'asc' }],
-        size: 1000, // Should be enough for 305 records
-        _source: { excludes: ['_id'] } // Exclude internal ES fields
-      }
+        }
+      },
+      sort: [{ dateutc: 'asc' }],
+      size: 1000, // Should be enough for 305 records
+      _source: { excludes: ['_id'] } // Exclude internal ES fields
     });
 
-    const documents = result.body.hits.hits.map(hit => hit._source);
+    const documents = result.hits.hits.map(hit => hit._source);
     logger.logInfo(`  ✓ Exported ${documents.length} documents from production`);
 
     if (documents.length === 0) {
@@ -160,22 +159,21 @@ async function copyProductionToStaging() {
 
     // Step 6: Verify the gap is filled
     logger.logInfo('\nStep 6: Verifying gap is filled in STAGING...');
+    // v8: count params are top-level (no nested `body`); response is flattened (no `.body`).
     const verifyResult = await stagingClient.count({
       index: 'ambient_weather_heiligers_imperial_*',
-      body: {
-        query: {
-          range: {
-            dateutc: {
-              gt: gapStart,
-              lt: gapEnd
-            }
+      query: {
+        range: {
+          dateutc: {
+            gt: gapStart,
+            lt: gapEnd
           }
         }
       }
     });
 
-    logger.logInfo(`  Documents in staging for this period: ${verifyResult.body.count}`);
-    logger.logInfo(`  Status: ${verifyResult.body.count > 0 ? '✓ GAP FILLED' : '✗ STILL MISSING'}`);
+    logger.logInfo(`  Documents in staging for this period: ${verifyResult.count}`);
+    logger.logInfo(`  Status: ${verifyResult.count > 0 ? '✓ GAP FILLED' : '✗ STILL MISSING'}`);
 
     // Summary
     logger.logInfo('\n=== COPY COMPLETE ===');
@@ -183,7 +181,7 @@ async function copyProductionToStaging() {
     logger.logInfo(`  - Exported from production: ${documents.length} documents`);
     logger.logInfo(`  - Saved to local files: ${filename}.json, .jsonl (imperial + metric)`);
     logger.logInfo(`  - Indexed to staging: ${imperialResult.indexCounts.count} imperial, ${metricResult.indexCounts.count} metric`);
-    logger.logInfo(`  - Verification: ${verifyResult.body.count} documents now in staging`);
+    logger.logInfo(`  - Verification: ${verifyResult.count} documents now in staging`);
 
   } catch (err) {
     logger.logError('Copy operation failed:', err.message);

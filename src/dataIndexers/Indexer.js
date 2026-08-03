@@ -74,7 +74,9 @@ class IndexData {
     let result;
     const aliasesResults = await getAmbientWeatherAliases(this.client);
     const currentIndices = aliasesResults
-      .filter(aliasEntry => (aliasEntry.is_write_index === 'true'))
+      // structured getAlias API returns is_write_index as a real BOOLEAN
+      // (the old _cat API returned the string 'true'); compare to boolean.
+      .filter(aliasEntry => (aliasEntry.is_write_index === true))
       .map((entry => entry.index))
     if (currentIndices && currentIndices.length > 0) {
       this.currentWriteIndices = currentIndices;

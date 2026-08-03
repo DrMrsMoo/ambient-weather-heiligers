@@ -58,8 +58,9 @@ async function verifyBackfill() {
 
   // 1. Check active write indices
   console.log('1. Active Write Indices:');
+  // v8: cat.aliases() returns the array directly (no `.body` wrapper).
   const aliases = await client.cat.aliases({ format: 'json' });
-  const writeIndices = aliases.body.filter(a =>
+  const writeIndices = aliases.filter(a =>
     a.alias.includes('ambient-weather-heiligers') && a['is_write_index'] === 'true'
   );
   writeIndices.forEach(idx => {
@@ -72,29 +73,28 @@ async function verifyBackfill() {
 
   console.log(`\n2. Imperial Data in Range (${new Date(startEpoch).toISOString()} to ${new Date(endEpoch).toISOString()}):`);
 
+  // v8: search params are top-level (no nested `body`); responses are flattened (no `.body`).
   const imperialQuery = await client.search({
     index: 'ambient_weather_heiligers_imperial_*',
-    body: {
-      query: {
-        range: {
-          dateutc: {
-            gt: startEpoch,
-            lt: endEpoch
-          }
+    query: {
+      range: {
+        dateutc: {
+          gt: startEpoch,
+          lt: endEpoch
         }
-      },
-      size: 0,
-      aggs: {
-        doc_count: { value_count: { field: 'dateutc' } },
-        min_date: { min: { field: 'dateutc' } },
-        max_date: { max: { field: 'dateutc' } }
       }
+    },
+    size: 0,
+    aggs: {
+      doc_count: { value_count: { field: 'dateutc' } },
+      min_date: { min: { field: 'dateutc' } },
+      max_date: { max: { field: 'dateutc' } }
     }
   });
 
-  const imperialCount = imperialQuery.body.hits.total.value;
-  const imperialMin = new Date(imperialQuery.body.aggregations.min_date.value).toISOString();
-  const imperialMax = new Date(imperialQuery.body.aggregations.max_date.value).toISOString();
+  const imperialCount = imperialQuery.hits.total.value;
+  const imperialMin = new Date(imperialQuery.aggregations.min_date.value).toISOString();
+  const imperialMax = new Date(imperialQuery.aggregations.max_date.value).toISOString();
 
   console.log(`   - Total documents: ${imperialCount}`);
   console.log(`   - Earliest timestamp: ${imperialMin}`);
@@ -105,27 +105,25 @@ async function verifyBackfill() {
 
   const metricQuery = await client.search({
     index: 'ambient_weather_heiligers_metric_*',
-    body: {
-      query: {
-        range: {
-          dateutc: {
-            gt: startEpoch,
-            lt: endEpoch
-          }
+    query: {
+      range: {
+        dateutc: {
+          gt: startEpoch,
+          lt: endEpoch
         }
-      },
-      size: 0,
-      aggs: {
-        doc_count: { value_count: { field: 'dateutc' } },
-        min_date: { min: { field: 'dateutc' } },
-        max_date: { max: { field: 'dateutc' } }
       }
+    },
+    size: 0,
+    aggs: {
+      doc_count: { value_count: { field: 'dateutc' } },
+      min_date: { min: { field: 'dateutc' } },
+      max_date: { max: { field: 'dateutc' } }
     }
   });
 
-  const metricCount = metricQuery.body.hits.total.value;
-  const metricMin = new Date(metricQuery.body.aggregations.min_date.value).toISOString();
-  const metricMax = new Date(metricQuery.body.aggregations.max_date.value).toISOString();
+  const metricCount = metricQuery.hits.total.value;
+  const metricMin = new Date(metricQuery.aggregations.min_date.value).toISOString();
+  const metricMax = new Date(metricQuery.aggregations.max_date.value).toISOString();
 
   console.log(`   - Total documents: ${metricCount}`);
   console.log(`   - Earliest timestamp: ${metricMin}`);
@@ -136,22 +134,20 @@ async function verifyBackfill() {
 
   const sampleQuery = await client.search({
     index: 'ambient_weather_heiligers_imperial_*',
-    body: {
-      query: {
-        range: {
-          dateutc: {
-            gt: startEpoch,
-            lt: endEpoch
-          }
+    query: {
+      range: {
+        dateutc: {
+          gt: startEpoch,
+          lt: endEpoch
         }
-      },
-      sort: [{ dateutc: 'asc' }],
-      size: 3,
-      _source: ['dateutc', 'date', 'tempf', 'humidity']
-    }
+      }
+    },
+    sort: [{ dateutc: 'asc' }],
+    size: 3,
+    _source: ['dateutc', 'date', 'tempf', 'humidity']
   });
 
-  sampleQuery.body.hits.hits.forEach((hit, idx) => {
+  sampleQuery.hits.hits.forEach((hit, idx) => {
     const src = hit._source;
     console.log(`   [${idx + 1}] ${src.date} - Temp: ${src.tempf}°F, Humidity: ${src.humidity}%`);
   });

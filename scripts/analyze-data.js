@@ -78,15 +78,14 @@ async function analyzeData() {
     const startEpoch = new Date(period.start).getTime();
     const endEpoch = new Date(period.end).getTime();
 
+    // v8: count params are top-level (no nested `body`); response is flattened (no `.body`).
     const result = await client.count({
       index: 'ambient_weather_heiligers_imperial_*',
-      body: {
-        query: {
-          range: {
-            dateutc: {
-              gte: startEpoch,
-              lt: endEpoch
-            }
+      query: {
+        range: {
+          dateutc: {
+            gte: startEpoch,
+            lt: endEpoch
           }
         }
       }
@@ -96,9 +95,9 @@ async function analyzeData() {
     const expected = Math.floor(hours * 12); // 12 records per hour at 5-min intervals
 
     console.log(`   ${period.label}`);
-    console.log(`     - Actual: ${result.body.count} records`);
+    console.log(`     - Actual: ${result.count} records`);
     console.log(`     - Expected: ~${expected} records (${hours} hrs × 12/hr)`);
-    console.log(`     - Coverage: ${((result.body.count / expected) * 100).toFixed(1)}%\n`);
+    console.log(`     - Coverage: ${((result.count / expected) * 100).toFixed(1)}%\n`);
   }
 
   // Check local data files

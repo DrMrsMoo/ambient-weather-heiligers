@@ -35,7 +35,8 @@ async function pingCluster(client = esClient) {
     esClientLogger.logError('[pingCluster] [ERROR]', err);
     throw err;
   }
-  return pingResult.body;
+  // v8: ping() returns the boolean directly (no { body } wrapper).
+  return pingResult;
 }
 
 /**
@@ -57,10 +58,27 @@ async function getAllAmbientWeatherIndices(client = require('./esClient')) {
   } catch (err) {
     esClientLogger.logError('[getAllAmbientWeatherIndices] [ERROR]', err)
   }
-  esClientLogger.logInfo('[getAllAmbientWeatherIndices] [SUCCESS]', clusterIndices.body);
-  return clusterIndices.body;
+  // v8: cat.indices() returns the array directly (no { body } wrapper).
+  esClientLogger.logInfo('[getAllAmbientWeatherIndices] [SUCCESS]', clusterIndices);
+  return clusterIndices;
 }
 /**
+ * Discovers the ambient-weather aliases via the STRUCTURED alias API
+ * (indices.getAlias) rather than the string-parsing _cat API.
+ *
+ * The structured response is keyed by index name, e.g.
+ * {
+ *   ambient_weather_heiligers_imperial_2021_06_12: {
+ *     aliases: {
+ *       'all-ambient-weather-heiligers-imperial': { is_write_index: true }
+ *     }
+ *   }
+ * }
+ * We flatten it back into the row array the callers expect so the return
+ * contract is unchanged EXCEPT that `is_write_index` is now a real BOOLEAN
+ * (the _cat API returned the string 'true'/'false'). When an alias entry
+ * omits `is_write_index`, the structured API means "not the write index",
+ * so we default it to `false`.
  *
  * @param {class} client: configured elasticsearch client
  * @returns array of objects containing { alias <string>, index <string>, is_write_index: <boolean> }
@@ -68,30 +86,37 @@ async function getAllAmbientWeatherIndices(client = require('./esClient')) {
  * [{
 *   alias: 'all-ambient-weather-heiligers-imperial',
 *   index: 'ambient_weather_heiligers_imperial_2021_06_12',
-*   is_write_index: 'false'
+*   is_write_index: true
 *  }]
  */
 async function getAmbientWeatherAliases(client = require('./esClient')) {
   let clusterAliasesResult;
-  let error;
   try {
-    const { body, statusCode } = await client.cat.aliases({
+    // v8: response is flattened. Request { meta: true } to keep the statusCode gate.
+    const { body, statusCode } = await client.indices.getAlias({
       name: '*ambient-weather-heiligers-*',
-      format: 'json',
-      h: ['alias', 'index', 'is_write_index'],
-      v: true,
       expand_wildcards: 'all'
-    });
+    }, { meta: true });
     if (statusCode === 200) {
-      clusterAliasesResult = body;
-    } else {
-      error = new Error(`Problem with getting the cluster aliases with code ${statusCode}`)
+      clusterAliasesResult = [];
+      // body is keyed by index name; each has an `aliases` map.
+      for (const [index, indexEntry] of Object.entries(body)) {
+        const aliases = (indexEntry && indexEntry.aliases) || {};
+        for (const [alias, aliasMeta] of Object.entries(aliases)) {
+          clusterAliasesResult.push({
+            alias,
+            index,
+            // structured API returns a real boolean; omitted => not the write index
+            is_write_index: (aliasMeta && aliasMeta.is_write_index) === true
+          });
+        }
+      }
     }
   } catch (err) {
     esClientLogger.logError('[getAmbientWeatherAliases] [ERROR]', err)
   }
   esClientLogger.logInfo('[getAmbientWeatherAliases] [SUCCESS]', clusterAliasesResult)
-  return clusterAliasesResult; // returns body, statusCode, headers, meta
+  return clusterAliasesResult;
 }
 /* params:
 * esClient = elastisearch client already configured
@@ -114,11 +139,11 @@ async function getAmbientWeatherAliases(client = require('./esClient')) {
 async function createIndex(client = require('./esClient'), indexName, indexMappings) {
   let createIndexResult;
   try {
+    // v8: request params are top-level (no nested `body`); `mappings` moves up.
+    // `{ ignore: [400] }` remains a valid TransportRequestOptions second arg.
     createIndexResult = await client.indices.create({
       index: indexName,
-      body: {
-        mappings: indexMappings
-      }
+      mappings: indexMappings
     }, { ignore: [400] }); // explicitly ignore 400, not 404. see https://github.com/elastic/elasticsearch-js/pull/927/files
   } catch (err) {
     if (!indexExistsError(err)) {
@@ -163,8 +188,9 @@ async function deleteIndex(client = require('./esClient'), indexName) {
       throw new Error('unhandled exception error from deleteIndex', err)
     }
   }
+  // v8: indices.delete() returns the response directly (no { body } wrapper).
   esClientLogger.logInfo('[deleteIndex] [SUCCESS]', deleteResult)
-  return deleteResult.body;
+  return deleteResult;
 }
 
 async function getMostRecentDoc(client = require('./esClient'), indexName, opts) {
@@ -182,16 +208,15 @@ async function getMostRecentDoc(client = require('./esClient'), indexName, opts)
 
   let searchResultBody;
   try {
-    const { body } = await client.search({
+    // v8: response is flattened (no { body }) and `query` is top-level (no nested `body`).
+    const response = await client.search({
       ...searchConfig,
       index: indexName,
-      body: {
-        query: {
-          match_all: {}
-        }
+      query: {
+        match_all: {}
       }
     });
-    searchResultBody = body.hits.hits;
+    searchResultBody = response.hits.hits;
     // esClientLogger.logInfo('result of search request:', searchResultBody)
   } catch (err) {
     esClientLogger.logError('search request error:', err)
@@ -219,21 +244,20 @@ async function searchDocsByDateRange(client = require('./esClient'), indexName, 
 
   let searchResultBody;
   try {
-    const { body } = await client.search({
+    // v8: response is flattened (no { body }) and `query` is top-level (no nested `body`).
+    const response = await client.search({
       ...searchConfig,
       index: indexName,
-      body: {
-        query: {
-          range: {
-            dateutc: {
-              gte: startDate,
-              lte: endDate
-            }
+      query: {
+        range: {
+          dateutc: {
+            gte: startDate,
+            lte: endDate
           }
         }
       }
     });
-    searchResultBody = body.hits.hits;
+    searchResultBody = response.hits.hits;
     esClientLogger.logInfo('[searchDocsByDateRange] found', searchResultBody.length, 'documents');
   } catch (err) {
     esClientLogger.logError('[searchDocsByDateRange] search request error:', err);
@@ -259,7 +283,8 @@ async function bulkIndexDocuments(client = require('./esClient'), indexName, pay
   }
   const body = payload;
   // console.log('---------------->>>esClientMethods, bulkIndexDocuments, body(payload)', body)
-  const { body: bulkResponse } = await client.bulk({ refresh: bulkConfig.refresh, body });
+  // v8: bulk operations are passed via top-level `operations`; response is flattened (no { body }).
+  const bulkResponse = await client.bulk({ refresh: bulkConfig.refresh, operations: body });
 
   if (bulkResponse.errors) {
     // The items array has the same order of the dataset we just indexed.
@@ -280,7 +305,8 @@ async function bulkIndexDocuments(client = require('./esClient'), indexName, pay
       }
     })
   }
-  const { body: count } = await client.count({ index: indexName })
+  // v8: count() returns the response directly (no { body } wrapper).
+  const count = await client.count({ index: indexName })
   return { indexCounts: count, erroredDocuments }
 }
 

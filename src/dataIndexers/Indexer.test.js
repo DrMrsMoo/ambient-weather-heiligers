@@ -110,10 +110,11 @@ describe('IndexData', () => {
 
   describe('getActiveWriteIndices', () => {
     it('returns and stores write indices', async () => {
+      // structured getAlias API returns is_write_index as a real BOOLEAN.
       const mockAliases = [
-        { alias: 'all-imperial', index: 'ambient_weather_heiligers_imperial_2024_01', is_write_index: 'true' },
-        { alias: 'all-imperial', index: 'ambient_weather_heiligers_imperial_2023_12', is_write_index: 'false' },
-        { alias: 'all-metric', index: 'ambient_weather_heiligers_metric_2024_01', is_write_index: 'true' }
+        { alias: 'all-imperial', index: 'ambient_weather_heiligers_imperial_2024_01', is_write_index: true },
+        { alias: 'all-imperial', index: 'ambient_weather_heiligers_imperial_2023_12', is_write_index: false },
+        { alias: 'all-metric', index: 'ambient_weather_heiligers_metric_2024_01', is_write_index: true }
       ];
 
       getAmbientWeatherAliases.mockResolvedValue(mockAliases);
@@ -132,7 +133,7 @@ describe('IndexData', () => {
 
     it('returns undefined when no write indices found', async () => {
       const mockAliases = [
-        { alias: 'all-imperial', index: 'old_index', is_write_index: 'false' }
+        { alias: 'all-imperial', index: 'old_index', is_write_index: false }
       ];
 
       getAmbientWeatherAliases.mockResolvedValue(mockAliases);
@@ -263,8 +264,8 @@ describe('IndexData', () => {
     it('returns success when cluster is reachable and has write indices', async () => {
       pingCluster.mockResolvedValue(true);
       getAmbientWeatherAliases.mockResolvedValue([
-        { alias: 'all-imperial', index: 'imperial_2024', is_write_index: 'true' },
-        { alias: 'all-metric', index: 'metric_2024', is_write_index: 'true' }
+        { alias: 'all-imperial', index: 'imperial_2024', is_write_index: true },
+        { alias: 'all-metric', index: 'metric_2024', is_write_index: true }
       ]);
       getMostRecentDoc.mockResolvedValue([{
         _source: { dateutc: 1704067200000, date: '2024-01-01' }
@@ -300,8 +301,8 @@ describe('IndexData', () => {
     it('calls methods in correct order', async () => {
       pingCluster.mockResolvedValue(true);
       getAmbientWeatherAliases.mockResolvedValue([
-        { alias: 'all-imperial', index: 'imperial_2024', is_write_index: 'true' },
-        { alias: 'all-metric', index: 'metric_2024', is_write_index: 'true' }
+        { alias: 'all-imperial', index: 'imperial_2024', is_write_index: true },
+        { alias: 'all-metric', index: 'metric_2024', is_write_index: true }
       ]);
       getMostRecentDoc.mockResolvedValue([{
         _source: { dateutc: 1704067200000 }

@@ -128,8 +128,9 @@ async function verifyCluster(indexer, clusterName) {
     const imperialIndices = 'ambient_weather_heiligers_imperial_*';
     const metricIndices = 'ambient_weather_heiligers_metric_*';
 
-    const { body: imperialCount } = await esClient.count({ index: imperialIndices });
-    const { body: metricCount } = await esClient.count({ index: metricIndices });
+    // v8: count() returns the response directly (no { body } wrapper).
+    const imperialCount = await esClient.count({ index: imperialIndices });
+    const metricCount = await esClient.count({ index: metricIndices });
 
     verifyLogger.logInfo(`[${clusterName}] Total Document Counts:`);
     verifyLogger.logInfo(`  - Imperial: ${imperialCount.count} documents`);
