@@ -236,8 +236,29 @@ describe('esClientMethods', () => {
       expect(result).toEqual(mockHits);
       expect(mockClient.search).toHaveBeenCalledWith(expect.objectContaining({
         index: 'test_index',
-        sort: ['dateutc:desc'],
+        // v8 requires a string (or sort objects), NOT a raw array like ['dateutc:desc']
+        // which triggers search_phase_execution_exception / 400.
+        sort: 'dateutc:desc',
         size: 10
+      }));
+    });
+
+    it('builds the sort string from opts.sortBy (the shape Indexer actually passes)', async () => {
+      // Regression guard: Indexer.getMostRecentIndexedDocuments passes
+      // sortBy: [{ field: 'dateutc', direction: 'desc' }]. The old guard checked
+      // opts.sort (wrong key) so sortBy was ignored and it fell back to a raw array,
+      // which v8 rejected with a 400. This asserts the correct comma-joined string.
+      mockClient.search.mockResolvedValue({ hits: { hits: [] } });
+
+      await getMostRecentDoc(mockClient, 'test_index', {
+        size: 1,
+        sortBy: [{ field: 'dateutc', direction: 'desc' }]
+      });
+
+      expect(mockClient.search).toHaveBeenCalledWith(expect.objectContaining({
+        index: 'test_index',
+        sort: 'dateutc:desc',
+        size: 1
       }));
     });
 

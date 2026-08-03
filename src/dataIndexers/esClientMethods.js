@@ -199,13 +199,17 @@ async function deleteIndex(client = require('./esClient'), indexName) {
 
 async function getMostRecentDoc(client = require('./esClient'), indexName, opts) {
   // esClientLogger.logInfo('indexName', indexName)
-  if (opts && opts.sort && opts.sort.length > 0) {
+  // Build the sort request from the caller's `sortBy` (that's the key Indexer passes).
+  // NOTE: v8 rejects a raw array like ["dateutc:desc"] as a top-level `sort` param
+  // (search_phase_execution_exception / 400). Use a comma-joined "field:direction"
+  // string, which v8 accepts. Default to "dateutc:desc" (most recent first).
+  if (opts && Array.isArray(opts.sortBy) && opts.sortBy.length > 0) {
     opts.sortReq = opts.sortBy.map((entry) => `${entry.field}:${entry.direction ?? 'asc'}`).join(',')
   }
 
   const searchConfig = {
     expand_wildcards: opts.expandWildcards ?? 'all', // for using wildcard expressions
-    sort: opts.sortReq ?? ["dateutc:desc"], // default sort order is descending with the most recent doc first
+    sort: opts.sortReq ?? "dateutc:desc", // default sort order is descending with the most recent doc first
     size: opts.size || 10,
     _source: opts._source ?? []
   };

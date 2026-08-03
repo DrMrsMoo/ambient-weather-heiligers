@@ -128,8 +128,18 @@ class IndexData {
     this.logger.logInfo('[getMostRecentIndexedDocuments] [metric RESULT]', JSON.stringify(latestMetricDocResult))
     this.logger.logInfo('[getMostRecentIndexedDocuments] [imperial RESULT]', JSON.stringify(latestImperialDocResult))
 
-    this.dateOflatestIndexedMetricDoc = latestMetricDocResult[0]._source.dateutc; // use dateutc instead
-    this.dateOflatestIndexedImperialDoc = latestImperialDocResult[0]._source.dateutc; // use dateutc instead
+    // Guard against an undefined/empty search result: getMostRecentDoc returns undefined
+    // if the search errors, and an empty array for a brand-new write index with no docs yet
+    // (see CLAUDE.md "First run on a new/empty cluster"). Optional-chain so we record
+    // undefined instead of throwing a TypeError that would kill the unattended cron run.
+    if (!latestMetricDocResult || latestMetricDocResult.length === 0) {
+      this.logger.logWarning('[getMostRecentIndexedDocuments] no metric documents found for the write index (empty index or search failure)')
+    }
+    if (!latestImperialDocResult || latestImperialDocResult.length === 0) {
+      this.logger.logWarning('[getMostRecentIndexedDocuments] no imperial documents found for the write index (empty index or search failure)')
+    }
+    this.dateOflatestIndexedMetricDoc = latestMetricDocResult?.[0]?._source?.dateutc; // use dateutc instead
+    this.dateOflatestIndexedImperialDoc = latestImperialDocResult?.[0]?._source?.dateutc; // use dateutc instead
 
     return { latestImperialDoc: latestImperialDocResult, latestMetricDoc: latestMetricDocResult };
   }
