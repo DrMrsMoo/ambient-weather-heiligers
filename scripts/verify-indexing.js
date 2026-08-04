@@ -123,8 +123,9 @@ async function verifyCluster(indexer, clusterName) {
       verifyLogger.logWarning(`[${clusterName}] No metric documents found`);
     }
 
-    // Get document counts (requires esClientMethods)
-    const esClient = indexer.esClient;
+    // Get document counts. IndexData stores the client as `this.client` (see Indexer.js
+    // constructor), not `this.esClient` — the latter is undefined and throws on .count().
+    const esClient = indexer.client;
     const imperialIndices = 'ambient_weather_heiligers_imperial_*';
     const metricIndices = 'ambient_weather_heiligers_metric_*';
 
