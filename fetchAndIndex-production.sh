@@ -44,7 +44,8 @@ cd "$REPO_DIR"
 if ! git fetch --tags --force >> logs/cron.log 2>&1; then
     echo "[deploy] WARNING: git fetch --tags FAILED — local tags may be stale." >> logs/cron.log
     echo "[deploy]          Under cron this is usually SSH auth (no agent/TTY for 1Password)." >> logs/cron.log
-    echo "[deploy]          Continuing with the local tag; see the staleness check below." >> logs/cron.log
+    echo "[deploy]          Continuing with the local tag — it may not be the deployed one." >> logs/cron.log
+    echo "[deploy]          Dependency verification below catches a stale tag only if the lockfile differs." >> logs/cron.log
 fi
 
 # Checkout production tag (detached HEAD is intentional and safe)
@@ -91,9 +92,17 @@ EXPECTED_ES_VERSION=$(git show "production-current:package-lock.json" 2>/dev/nul
 INSTALLED_ES_VERSION=$(grep -m1 '"version"' node_modules/@elastic/elasticsearch/package.json 2>/dev/null \
     | sed -E 's/.*"version": "([^"]+)".*/\1/')
 
-if [ -n "$EXPECTED_ES_VERSION" ] && [ "$EXPECTED_ES_VERSION" != "$INSTALLED_ES_VERSION" ]; then
+# Fail closed: an unreadable version is an unverifiable deploy, not a passing one.
+if [ -z "$EXPECTED_ES_VERSION" ] || [ -z "$INSTALLED_ES_VERSION" ]; then
+    echo "[deploy] ERROR: cannot verify dependencies — ABORTING, not indexing." >> logs/cron.log
+    echo "[deploy]        @elastic/elasticsearch installed=${INSTALLED_ES_VERSION:-<unreadable>} expected=${EXPECTED_ES_VERSION:-<unreadable>}" >> logs/cron.log
+    echo "[deploy]        Check node_modules exists and the lockfile format is still parseable." >> logs/cron.log
+    exit 1
+fi
+
+if [ "$EXPECTED_ES_VERSION" != "$INSTALLED_ES_VERSION" ]; then
     echo "[deploy] ERROR: dependency mismatch — ABORTING, not indexing." >> logs/cron.log
-    echo "[deploy]        @elastic/elasticsearch installed=${INSTALLED_ES_VERSION:-<missing>} expected=${EXPECTED_ES_VERSION}" >> logs/cron.log
+    echo "[deploy]        @elastic/elasticsearch installed=${INSTALLED_ES_VERSION} expected=${EXPECTED_ES_VERSION}" >> logs/cron.log
     echo "[deploy]        node_modules does not match the production-current lockfile." >> logs/cron.log
     echo "[deploy]        Likely a stale local tag (see fetch warning above). Fix on the Pi with:" >> logs/cron.log
     echo "[deploy]          git fetch --tags --force && git checkout production-current && npm ci" >> logs/cron.log
