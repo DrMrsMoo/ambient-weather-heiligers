@@ -37,8 +37,16 @@ fi
 
 cd "$REPO_DIR"
 
-# Fetch latest tags
-git fetch --tags --quiet 2>/dev/null || true
+# Fetch latest tags. NOT silenced — a failed fetch is how a deploy silently no-ops.
+# - cron has no TTY/SSH agent, so a 1Password-gated fetch fails every run
+# - silent failure => stale local tag => npm ci reinstalls the OLD lockfile
+# - warn only, don't abort: a network blip shouldn't stop indexing
+if ! git fetch --tags --force >> logs/cron.log 2>&1; then
+    echo "[deploy] WARNING: git fetch --tags FAILED — local tags may be stale." >> logs/cron.log
+    echo "[deploy]          Under cron this is usually SSH auth (no agent/TTY for 1Password)." >> logs/cron.log
+    echo "[deploy]          Continuing with the local tag — it may not be the deployed one." >> logs/cron.log
+    echo "[deploy]          Dependency verification below catches a stale tag only if the lockfile differs." >> logs/cron.log
+fi
 
 # Checkout production tag (detached HEAD is intentional and safe)
 git checkout production-current --quiet 2>/dev/null || {
@@ -71,6 +79,36 @@ if [ ! -f "$LOCK_STAMP" ] || [ "$(cat "$LOCK_STAMP" 2>/dev/null)" != "$CURRENT_L
         exit 1
     fi
 fi
+
+# --- Post-install verification ---------------------------------------------
+# "npm ci succeeded" != "installed what we intended". Assert disk matches lockfile.
+# - 2026-08-03: clean npm ci installed ES 7.16.0 while the tag pinned 8.19.2
+# - looked deployed for a day; only the v8 verification scripts failed
+# - runs OUTSIDE the gate on purpose: a stale install leaves a VALID stamp,
+#   so later runs skip npm ci and a check nested in the gate would never fire
+EXPECTED_ES_VERSION=$(git show "production-current:package-lock.json" 2>/dev/null \
+    | grep -A2 '"node_modules/@elastic/elasticsearch"' | grep -m1 '"version"' \
+    | sed -E 's/.*"version": "([^"]+)".*/\1/')
+INSTALLED_ES_VERSION=$(grep -m1 '"version"' node_modules/@elastic/elasticsearch/package.json 2>/dev/null \
+    | sed -E 's/.*"version": "([^"]+)".*/\1/')
+
+# Fail closed: an unreadable version is an unverifiable deploy, not a passing one.
+if [ -z "$EXPECTED_ES_VERSION" ] || [ -z "$INSTALLED_ES_VERSION" ]; then
+    echo "[deploy] ERROR: cannot verify dependencies — ABORTING, not indexing." >> logs/cron.log
+    echo "[deploy]        @elastic/elasticsearch installed=${INSTALLED_ES_VERSION:-<unreadable>} expected=${EXPECTED_ES_VERSION:-<unreadable>}" >> logs/cron.log
+    echo "[deploy]        Check node_modules exists and the lockfile format is still parseable." >> logs/cron.log
+    exit 1
+fi
+
+if [ "$EXPECTED_ES_VERSION" != "$INSTALLED_ES_VERSION" ]; then
+    echo "[deploy] ERROR: dependency mismatch — ABORTING, not indexing." >> logs/cron.log
+    echo "[deploy]        @elastic/elasticsearch installed=${INSTALLED_ES_VERSION} expected=${EXPECTED_ES_VERSION}" >> logs/cron.log
+    echo "[deploy]        node_modules does not match the production-current lockfile." >> logs/cron.log
+    echo "[deploy]        Likely a stale local tag (see fetch warning above). Fix on the Pi with:" >> logs/cron.log
+    echo "[deploy]          git fetch --tags --force && git checkout production-current && npm ci" >> logs/cron.log
+    exit 1
+fi
+echo "[deploy] verified @elastic/elasticsearch@${INSTALLED_ES_VERSION} matches production-current lockfile" >> logs/cron.log
 # ---------------------------------------------------------------------------
 
 # Run the indexing
