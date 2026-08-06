@@ -6,7 +6,7 @@ PUT _index_template/ambient_weather_heiligers_metric
       "index": { "number_of_shards": 1 }
     },
     "mappings": {
-      "dynamic": "true",
+      "dynamic": "runtime",
       "date_detection": true,
       "numeric_detection": true,
       "dynamic_date_formats": [

@@ -55,8 +55,9 @@ separate, deliberate change:
 - **Battery:** `battout` (`long`, imperial) vs `battery_condition` (`keyword`, metric) are genuinely
   different fields, not a unit conversion. Correct as-is.
 
-`dynamic: "true"` is set, so an OMITTED field gets re-inferred — and can be inferred wrongly (a rain
-value arriving as `1` would infer `long`). That is why the property lists must stay complete.
+The property lists must stay **complete**: under `dynamic: "runtime"` (§4) an omitted field is not
+indexed — it falls back to a runtime field with an INFERRED type, which is both slower to query and
+liable to infer wrongly (a rain value of `1` infers `long`). Explicit beats inferred.
 
 **3. Several mapped fields are LOGSTASH-ERA and are NOT written by the current pipeline.**
 
@@ -76,6 +77,40 @@ nothing at write time.
 
 ➡️ **Do NOT read their presence as "the pipeline populates these."** It does not. If you are adding
 a field, model it on the weather properties, not on these.
+
+**4. `dynamic` is `"runtime"` — a DELIBERATE change from the legacy templates (2026-08-06).**
+
+Legacy used `dynamic: "true"`. The composable templates use `"runtime"`.
+
+| | `true` (legacy) | `false` | `"runtime"` (now) |
+|---|---|---|---|
+| Stored in `_source` | ✅ | ✅ | ✅ |
+| Visible in GET by id | ✅ | ✅ | ✅ |
+| Searchable / aggregatable | ✅ | ❌ | ✅ (at query time) |
+| Added to the inverted index | ✅ | ❌ | ❌ |
+| Ingest rejects a document | never | never | never |
+
+**Why not `true`:** a new field is auto-mapped with an INFERRED type, and a wrong inference is
+permanent without a reindex. This is not hypothetical — the metric rain fields typed as `long`
+(truncating sub-mm values) are exactly that mistake, still visible in §2 above.
+
+**Why not `false`:** unmapped fields become unqueryable and unaggregatable. Making one usable would
+mean defining a runtime field by hand first — extra work just to check whether a trend matters.
+
+**Why `"runtime"`:** new fields are queryable and aggregatable immediately, with no manual step, and
+a wrong inferred type is corrected by editing the runtime field — **no reindex**. Ingest is never
+rejected.
+
+⚠️ **Cost:** runtime fields are computed per-document, per-query from `_source` — no doc_values, no
+inverted index. Aggregating one across ~1.9M documents is materially slower than an indexed field.
+➡️ **If a runtime field proves useful, promote it to a real property in this file** and let it be
+indexed on the next index. Runtime is for discovery, not for permanent hot-path fields.
+
+📌 `date_detection`, `numeric_detection` and `dynamic_date_formats` are **KEPT and ARE active** —
+they govern type inference for runtime fields too. (They would be inert only under `dynamic: false`.)
+
+⚠️ **Applies to indices created AFTER this template is applied.** Existing indices keep their
+current mappings, including their `dynamic` setting.
 
 ## Legacy keys intentionally dropped
 
