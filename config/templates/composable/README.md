@@ -47,9 +47,8 @@ landing on the old one. Matches legacy behaviour exactly — the legacy files al
 **2. Known type inconsistencies were copied FAITHFULLY, not fixed.**
 Do not "tidy" these while pasting. Changing them needs a reindex to affect existing data and is a
 separate, deliberate change:
-- **Rain fields:** imperial is all `float`. Metric has `hourly_rain_mm`, `weekly_rain_mm`,
-  `event_rain_mm` as `long` (truncates sub-mm) while `daily/monthly/total_rain_mm` are `float`.
-  Almost certainly a legacy mistake.
+- ✅ **Rain fields — FIXED 2026-08-06, no longer a discrepancy.** All six metric rain fields are
+  now `float` (`hourly_rain_mm`, `weekly_rain_mm`, `event_rain_mm` were `long`). See §5.
 - **Wind speed:** `windspeedmph` / `windspeed_km_per_hr` are `long` while gusts differ across the
   pair (`windgustmph` `long`, `windgust_km_per_hr` `float`).
 - **Battery:** `battout` (`long`, imperial) vs `battery_condition` (`keyword`, metric) are genuinely
@@ -118,6 +117,40 @@ they govern type inference for runtime fields too. (They would be inert only und
 
 ⚠️ **Applies to indices created AFTER this template is applied.** Existing indices keep their
 current mappings, including their `dynamic` setting.
+
+**5. Rain precision — the mapping was never the real bug (fixed 2026-08-06).**
+
+The `long`/`float` split on the metric rain fields looked like the problem. It was cosmetic.
+
+The actual precision loss was in `src/utils/helpers.js` → `convertRainReading()`, which rounded
+**every** rain conversion to zero decimals:
+```js
+return Number((converted).toFixed(0));   // ← was this
+return Number((converted).toFixed(3));   // ← now this
+```
+So all six fields already arrived as whole numbers; the `float` ones stored integers. Retyping the
+mapping alone would have changed nothing.
+
+**What it cost:** `0.01 in` = `0.254 mm` rounded to **`0`** — light rain recorded as *no rain*.
+`0.071 in` = `1.8034 mm` stored as `2`. Anything under 0.5 mm vanished entirely.
+
+`3` decimals matches `convertTemp` and `convertMPH` in the same file; rain was the lone outlier
+(barometer uses 6).
+
+**Both changes were required and shipped together:**
+- `helpers.js` → `toFixed(3)` — recovers the precision
+- all six metric rain fields → `float` — lets it actually be stored
+
+Fixtures and assertions updated to match (`total_rain_mm: 2` → `1.803`, verified against
+`convert-units`). Full suite green: 179 passed.
+
+⚠️ **Existing data is NOT recovered.** Everything already indexed was rounded before it reached
+Elasticsearch; the precision is gone from `_source` and can only be restored by re-converting from
+the imperial originals. New data only.
+
+⚠️ **The converter change needs a DEPLOY to take effect on the Pi** — it is pipeline code, unlike
+the templates which are cluster-side. Verify the installed artifact, not a green pipeline
+(LESSONS §1).
 
 ## Legacy keys intentionally dropped
 

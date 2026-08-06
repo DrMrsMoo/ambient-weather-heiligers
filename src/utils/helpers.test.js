@@ -94,7 +94,7 @@ describe("helpers", () => {
         daily_rain_mm: 0,
         weekly_rain_mm: 0,
         monthly_rain_mm: 0,
-        total_rain_mm: 2,
+        total_rain_mm: 1.803,
         solar_radiation_W_per_sq_m: 956.05,
         feels_like_outside_c: 39.283,
         dewpoint_c: 13.256,

@@ -36,12 +36,12 @@ PUT _index_template/ambient_weather_heiligers_metric
         "windspeed_km_per_hr": { "type": "long" },
         "windgust_km_per_hr": { "type": "float" },
         "max_daily_gust_km_per_hr": { "type": "float" },
-        "hourly_rain_mm": { "type": "long" },
+        "hourly_rain_mm": { "type": "float" },
         "daily_rain_mm": { "type": "float" },
-        "weekly_rain_mm": { "type": "long" },
+        "weekly_rain_mm": { "type": "float" },
         "monthly_rain_mm": { "type": "float" },
         "total_rain_mm": { "type": "float" },
-        "event_rain_mm": { "type": "long" },
+        "event_rain_mm": { "type": "float" },
         "battery_condition": { "type": "keyword", "ignore_above": 256 }
       }
     },
