@@ -41,7 +41,9 @@ cd "$REPO_DIR"
 # - cron has no TTY/SSH agent, so a 1Password-gated fetch fails every run
 # - silent failure => stale local tag => npm ci reinstalls the OLD lockfile
 # - warn only, don't abort: a network blip shouldn't stop indexing
+FETCH_OK=yes
 if ! git fetch --tags --force >> logs/cron.log 2>&1; then
+    FETCH_OK=no
     echo "[deploy] WARNING: git fetch --tags FAILED — local tags may be stale." >> logs/cron.log
     echo "[deploy]          Under cron this is usually SSH auth (no agent/TTY for 1Password)." >> logs/cron.log
     echo "[deploy]          Continuing with the local tag — it may not be the deployed one." >> logs/cron.log
@@ -63,9 +65,19 @@ git checkout production-current --quiet 2>/dev/null || {
 # Compare against the REMOTE ref, not the local tag: local HEAD always equals the
 # local tag (we just checked it out), so only local-vs-remote detects a stale tag
 # left behind by a failed fetch.
+# Reuse the fetch above rather than making a second network call: if the fetch
+# succeeded, the local tag IS the remote tag. Only reach out again when the fetch
+# failed, and then with a hard timeout — a HUNG ls-remote (GitHub degraded, not
+# down) would otherwise block past the next cron slot.
 HEAD_SHA=$(git rev-parse HEAD 2>/dev/null)
 REMOTE_TAG_SHA=$(git rev-parse "refs/tags/production-current^{commit}" 2>/dev/null)
-ORIGIN_TAG_SHA=$(git ls-remote origin refs/tags/production-current 2>/dev/null | awk '{print $1}')
+
+if [ "$FETCH_OK" = "yes" ]; then
+    ORIGIN_TAG_SHA="$REMOTE_TAG_SHA"
+else
+    ORIGIN_TAG_SHA=$(GIT_HTTP_LOW_SPEED_LIMIT=1000 GIT_HTTP_LOW_SPEED_TIME=15 \
+        git ls-remote origin refs/tags/production-current 2>/dev/null | awk '{print $1}')
+fi
 
 if [ -n "$ORIGIN_TAG_SHA" ]; then
     # Tag objects: ls-remote gives the tag SHA, which differs from the commit for
@@ -82,10 +94,13 @@ if [ -n "$ORIGIN_TAG_SHA" ]; then
     fi
     echo "[deploy] verified source at ${HEAD_SHA} matches origin production-current" >> logs/cron.log
 else
-    # No network / auth failure: cannot prove freshness. Warn, don't abort — a
-    # blip should not stop indexing, and the local tag is still self-consistent.
+    # GitHub unreachable: cannot prove freshness. NEVER abort here — weather data
+    # is still being produced and the clusters are still reachable; refusing to
+    # index because a code host is down would lose real data to fix nothing.
+    # The local tag is self-consistent; worst case we run slightly old code.
     echo "[deploy] WARNING: could not reach origin to verify production-current." >> logs/cron.log
     echo "[deploy]          Running local tag ${REMOTE_TAG_SHA} — freshness UNVERIFIED." >> logs/cron.log
+    echo "[deploy]          CONTINUING with indexing (a code-host outage must not cost data)." >> logs/cron.log
 fi
 
 # --- Gated dependency sync -------------------------------------------------
