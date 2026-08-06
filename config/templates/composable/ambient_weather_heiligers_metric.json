@@ -15,7 +15,6 @@ PUT _index_template/ambient_weather_heiligers_metric
       ],
       "properties": {
         "@timestamp": { "type": "date", "format": "strict_date_optional_time" },
-        "@version": { "type": "long" },
         "date": { "type": "date" },
         "dateutc": { "type": "long" },
         "last_rain": { "type": "date", "format": "strict_date_optional_time" },
@@ -43,50 +42,7 @@ PUT _index_template/ambient_weather_heiligers_metric
         "monthly_rain_mm": { "type": "float" },
         "total_rain_mm": { "type": "float" },
         "event_rain_mm": { "type": "long" },
-        "battery_condition": { "type": "keyword", "ignore_above": 256 },
-        "fulldate": {
-          "properties": {
-            "year":     { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
-            "month":    { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
-            "monthday": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
-            "hour":     { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
-            "minute":   { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } }
-          }
-        },
-        "agent": {
-          "properties": {
-            "hostname":     { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
-            "id":           { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
-            "ephemeral_id": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
-            "type":         { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
-            "version":      { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } }
-          }
-        },
-        "host": {
-          "properties": {
-            "name": { "type": "keyword", "ignore_above": 256 }
-          }
-        },
-        "ecs": {
-          "properties": {
-            "version": { "type": "keyword", "ignore_above": 256 }
-          }
-        },
-        "log": {
-          "properties": {
-            "file": {
-              "properties": {
-                "path": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } }
-              }
-            },
-            "offset": { "type": "long" }
-          }
-        },
-        "fields": {
-          "properties": {
-            "data_type": { "type": "keyword", "ignore_above": 256 }
-          }
-        }
+        "battery_condition": { "type": "keyword", "ignore_above": 256 }
       }
     },
     "aliases": {

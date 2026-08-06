@@ -59,24 +59,31 @@ The property lists must stay **complete**: under `dynamic: "runtime"` (§4) an o
 indexed — it falls back to a runtime field with an INFERRED type, which is both slower to query and
 liable to infer wrongly (a rain value of `1` infers `long`). Explicit beats inferred.
 
-**3. Several mapped fields are LOGSTASH-ERA and are NOT written by the current pipeline.**
+**3. LOGSTASH-ERA fields were REMOVED 2026-08-06 — deliberately, do not re-add them.**
 
-`agent.*` · `ecs.version` · `log.file.path` · `log.offset` · `@version` · `host.name` ·
-`fields.data_type` · `fulldate.*`
+Dropped from both templates:
+`fulldate.*` · `agent.*` · `host.name` · `ecs.version` · `log.file.path` · `log.offset` ·
+`fields.data_type` · `@version`
 
-These are the standard field set Filebeat/Logstash injected. Verified 2026-08-06: grepping all
-`*.js` / `*.mjs` in this repo (excluding `node_modules`) returns **zero** references to any of
-them. The Node pipeline writes weather data only. Same era as the `filebeat-7.6.1` and `logstash`
-legacy templates deleted in Phase 3.
+These were the standard field set Filebeat/Logstash injected, inherited unexamined from the legacy
+templates. Verified before removal: grepping all `*.js` / `*.mjs` in this repo (excluding
+`node_modules`) returns **zero** references to any of them. The Node pipeline writes weather data
+only. Same era as the `filebeat-7.6.1` and `logstash` legacy templates deleted in Phase 3.
 
-➡️ **They are kept in the template deliberately. Do not remove them.** The live indices physically
-contain documents carrying these fields (they were copied in `_source` by the 2026-08-05 reindex
-from `..._2021_12_30`). Dropping them from the template would leave future indices unable to be
-queried consistently with the current ones. Under `dynamic: "true"` an unused mapped property costs
-nothing at write time.
+Result: **29 properties each**, all weather data or timestamps. Nothing mapped that the pipeline
+does not write.
 
-➡️ **Do NOT read their presence as "the pipeline populates these."** It does not. If you are adding
-a field, model it on the weather properties, not on these.
+**`@timestamp` was KEPT** — it is the conventional Elasticsearch time field and Kibana data views
+commonly default to it. The pipeline's own time fields are `date` and `dateutc`.
+
+📌 **Old documents that DO carry these fields remain queryable.** Documents in
+`..._2026_08_05` (copied from `..._2021_12_30` by the 08-05 reindex) still have them in `_source`.
+Under `dynamic: "runtime"` (§4) they resolve at query time, so removing the explicit mapping does
+not make that history unreachable — it is just slower to aggregate. This is precisely why `runtime`
+made the removal safe.
+
+⚠️ **Existing indices are unaffected** — they keep whatever mapping they were created with. This
+only governs indices created after the template is applied.
 
 **4. `dynamic` is `"runtime"` — a DELIBERATE change from the legacy templates (2026-08-06).**
 
