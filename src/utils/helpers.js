@@ -24,10 +24,12 @@ const calcMinutesDiff = (to, from) => {
 };
 
 
+// 3 decimals matches convertTemp/convertMPH
+// toFixed(0) rounded sub-mm rain to 0 — 0.01in (0.254mm) recorded as no rain
 function convertRainReading(reading) {
   if (reading !== 0) {
     const converted = cu(reading).from('in').to('mm');
-    return Number((converted).toFixed(0));
+    return Number((converted).toFixed(3));
   }
   return 0.0;
 };

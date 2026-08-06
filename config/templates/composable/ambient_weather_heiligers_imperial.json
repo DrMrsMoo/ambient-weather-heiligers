@@ -1,0 +1,56 @@
+PUT _index_template/ambient_weather_heiligers_imperial
+{
+  "index_patterns": ["ambient_weather_heiligers_imperial_*"],
+  "template": {
+    "settings": {
+      "index": { "number_of_shards": 1 }
+    },
+    "mappings": {
+      "dynamic": "runtime",
+      "date_detection": true,
+      "numeric_detection": true,
+      "dynamic_date_formats": [
+        "strict_date_optional_time",
+        "yyyy/MM/dd HH:mm:ss Z||yyyy/MM/dd Z||strict_date_time"
+      ],
+      "properties": {
+        "@timestamp": { "type": "date", "format": "strict_date_optional_time" },
+        "date": { "type": "date" },
+        "dateutc": { "type": "long" },
+        "lastRain": { "type": "date", "format": "strict_date_optional_time" },
+        "loc": { "type": "keyword", "ignore_above": 256 },
+        "tags": { "type": "keyword", "ignore_above": 256 },
+        "tempf": { "type": "float" },
+        "tempinf": { "type": "float" },
+        "feelsLike": { "type": "float" },
+        "feelsLikein": { "type": "float" },
+        "dewPoint": { "type": "float" },
+        "dewPointin": { "type": "float" },
+        "humidity": { "type": "long" },
+        "humidityin": { "type": "long" },
+        "baromabsin": { "type": "float" },
+        "baromrelin": { "type": "float" },
+        "solarradiation": { "type": "float" },
+        "uv": { "type": "long" },
+        "winddir": { "type": "long" },
+        "windspeedmph": { "type": "long" },
+        "windgustmph": { "type": "long" },
+        "maxdailygust": { "type": "float" },
+        "hourlyrainin": { "type": "float" },
+        "dailyrainin": { "type": "float" },
+        "weeklyrainin": { "type": "float" },
+        "monthlyrainin": { "type": "float" },
+        "totalrainin": { "type": "float" },
+        "eventrainin": { "type": "float" },
+        "battout": { "type": "long" }
+      }
+    },
+    "aliases": {
+      "all-ambient-weather-heiligers-imperial": {}
+    }
+  },
+  "_meta": {
+    "description": "Migrated from legacy _template to composable, 2026-08-03. Source: config/templates/ambient_weather_heiligers_imperial_",
+    "migrated_from": "legacy _template v1"
+  }
+}
