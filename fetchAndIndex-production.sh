@@ -45,7 +45,7 @@ if ! git fetch --tags --force >> logs/cron.log 2>&1; then
     echo "[deploy] WARNING: git fetch --tags FAILED — local tags may be stale." >> logs/cron.log
     echo "[deploy]          Under cron this is usually SSH auth (no agent/TTY for 1Password)." >> logs/cron.log
     echo "[deploy]          Continuing with the local tag — it may not be the deployed one." >> logs/cron.log
-    echo "[deploy]          Dependency verification below catches a stale tag only if the lockfile differs." >> logs/cron.log
+    echo "[deploy]          Source verification below catches a stale tag if origin is reachable." >> logs/cron.log
 fi
 
 # Checkout production tag (detached HEAD is intentional and safe)
@@ -53,6 +53,40 @@ git checkout production-current --quiet 2>/dev/null || {
     echo "ERROR: production-current tag not found!" >> logs/cron.log
     exit 1
 }
+
+# --- Source verification ---------------------------------------------------
+# Assert the checked-out source IS the deployed tag. The dependency check below
+# only catches deploys that change package-lock.json — a source-only deploy
+# (e.g. 2026-08-06 helpers.js toFixed(0)->toFixed(3)) leaves the lockfile
+# untouched, so the npm ci gate SKIPS and the version assertion PASSES while the
+# Pi runs stale code and reports success.
+# Compare against the REMOTE ref, not the local tag: local HEAD always equals the
+# local tag (we just checked it out), so only local-vs-remote detects a stale tag
+# left behind by a failed fetch.
+HEAD_SHA=$(git rev-parse HEAD 2>/dev/null)
+REMOTE_TAG_SHA=$(git rev-parse "refs/tags/production-current^{commit}" 2>/dev/null)
+ORIGIN_TAG_SHA=$(git ls-remote origin refs/tags/production-current 2>/dev/null | awk '{print $1}')
+
+if [ -n "$ORIGIN_TAG_SHA" ]; then
+    # Tag objects: ls-remote gives the tag SHA, which differs from the commit for
+    # annotated tags. Resolve locally when we have the object; fall back to the
+    # local tag's commit if we cannot.
+    RESOLVED=$(git rev-parse "${ORIGIN_TAG_SHA}^{commit}" 2>/dev/null || echo "$ORIGIN_TAG_SHA")
+    if [ "$HEAD_SHA" != "$RESOLVED" ]; then
+        echo "[deploy] ERROR: checked-out source is NOT the deployed tag — aborting run." >> logs/cron.log
+        echo "[deploy]        HEAD:                  $HEAD_SHA" >> logs/cron.log
+        echo "[deploy]        origin production-current: $RESOLVED" >> logs/cron.log
+        echo "[deploy]        Local tag is stale (see fetch warning above). Fix on the Pi with:" >> logs/cron.log
+        echo "[deploy]          git fetch --tags --force && git checkout production-current" >> logs/cron.log
+        exit 1
+    fi
+    echo "[deploy] verified source at ${HEAD_SHA} matches origin production-current" >> logs/cron.log
+else
+    # No network / auth failure: cannot prove freshness. Warn, don't abort — a
+    # blip should not stop indexing, and the local tag is still self-consistent.
+    echo "[deploy] WARNING: could not reach origin to verify production-current." >> logs/cron.log
+    echo "[deploy]          Running local tag ${REMOTE_TAG_SHA} — freshness UNVERIFIED." >> logs/cron.log
+fi
 
 # --- Gated dependency sync -------------------------------------------------
 # Only reinstall when package-lock.json actually changed since the last successful
