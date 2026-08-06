@@ -58,6 +58,25 @@ separate, deliberate change:
 `dynamic: "true"` is set, so an OMITTED field gets re-inferred — and can be inferred wrongly (a rain
 value arriving as `1` would infer `long`). That is why the property lists must stay complete.
 
+**3. Several mapped fields are LOGSTASH-ERA and are NOT written by the current pipeline.**
+
+`agent.*` · `ecs.version` · `log.file.path` · `log.offset` · `@version` · `host.name` ·
+`fields.data_type` · `fulldate.*`
+
+These are the standard field set Filebeat/Logstash injected. Verified 2026-08-06: grepping all
+`*.js` / `*.mjs` in this repo (excluding `node_modules`) returns **zero** references to any of
+them. The Node pipeline writes weather data only. Same era as the `filebeat-7.6.1` and `logstash`
+legacy templates deleted in Phase 3.
+
+➡️ **They are kept in the template deliberately. Do not remove them.** The live indices physically
+contain documents carrying these fields (they were copied in `_source` by the 2026-08-05 reindex
+from `..._2021_12_30`). Dropping them from the template would leave future indices unable to be
+queried consistently with the current ones. Under `dynamic: "true"` an unused mapped property costs
+nothing at write time.
+
+➡️ **Do NOT read their presence as "the pipeline populates these."** It does not. If you are adding
+a field, model it on the weather properties, not on these.
+
 ## Legacy keys intentionally dropped
 
 `order` → superseded by `priority` (unset; nothing else matches these patterns — add
