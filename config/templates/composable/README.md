@@ -35,7 +35,7 @@ POST _index_template/_simulate_index/ambient_weather_heiligers_metric_2099_01
 ```
 Assert: 1 shard · your mappings · alias `all-ambient-weather-heiligers-{imperial,metric}`.
 
-## ⚠️ Two things that will bite you later
+## ⚠️ Things that will bite you later
 
 **1. No `is_write_index` in the `aliases` block — this is deliberate.**
 A new index created under these templates joins the alias as a **READ member only**. Write-index
