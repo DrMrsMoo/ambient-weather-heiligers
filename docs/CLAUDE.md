@@ -474,7 +474,7 @@ The Ambient Weather API counts backwards in time, which can cause duplicates. Th
 ## Dependencies
 
 ### Core Dependencies
-- `@elastic/elasticsearch` (v7.16.0) - ES client
+- `@elastic/elasticsearch` (v8.19.2) - ES client (upgraded from v7.16.0 in PR #19, Aug 2026)
 - `ambient-weather-api` (0.0.6) - Ambient Weather API client
 - `convert-units` (2.3.4) - Unit conversion
 - `moment-timezone` (0.5.31) - Timezone handling
@@ -492,7 +492,7 @@ See [REFACTOR_PLAN.md](REFACTOR_PLAN.md) for the comprehensive modernization roa
 **High Priority:**
 - [x] ~~Expand test coverage to >80%~~ ✅ **COMPLETE** (176 tests, core features fully covered)
 - [ ] Add tests for utility scripts (manual-index, copy-prod-to-staging, archive-data)
-- [ ] Upgrade Elasticsearch client to v8+ (unblocks cluster upgrade to v9)
+- [x] ~~Upgrade Elasticsearch client to v8+ (unblocks cluster upgrade to v9)~~ ✅ **COMPLETE** (v8.19.2, PR #19)
 - [ ] Convert to TypeScript
 
 **Medium Priority:**
@@ -547,6 +547,7 @@ Progress is tracked in REFACTOR_PLAN.md with detailed checklists for each epic.
 - **[README.md](../README.md)** - Project overview and usage instructions
 - **[scripts/README.md](../scripts/README.md)** - Documentation for all utility scripts
 - **[INCIDENT_2026-01-11_data_ingestion_failure.md](INCIDENT_2026-01-11_data_ingestion_failure.md)** - Log rotation permission incident report
+- **[ELASTICSEARCH_UPGRADE_LESSONS.md](ELASTICSEARCH_UPGRADE_LESSONS.md)** - Hard-won lessons from the 8.19→9.4 upgrade prep: deploy verification, misleading `_cat` columns and deprecation messages, alias/cutover gotchas, open risks
 
 ---
 
