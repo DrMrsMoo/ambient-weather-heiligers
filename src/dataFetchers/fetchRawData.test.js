@@ -478,6 +478,41 @@ describe('FetchRawData', () => {
         expect(result).toBe('too early');
         expect(rawDataFetcher.fetchAndStoreData).not.toHaveBeenCalled();
       });
+
+      it('uses maxNumRecords (288) for batched API calls, not undefined', async () => {
+        // Regression for multi-day batch path: the loop sets this.numberOfRecords
+        // = AW_CONSTANTS.maxNumRecordsCanGet (undefined), causing fetchRecentData
+        // to be called with limit: undefined instead of 288.
+        const fromDate = Date.parse('2020-07-19T12:00:00.000Z');
+        const clusterDate = Date.parse('2020-07-08T12:00:00.000Z'); // 11-day gap → triggers batch path
+
+        rawDataFetcher = new FetchRawData(mockAWApi, mockFs);
+
+        jest
+          .spyOn(rawDataFetcher, 'extractUniqueDatesFromFiles')
+          .mockImplementation(() => [clusterDate]);
+
+        const fetchAndStoreDataSpy = jest
+          .spyOn(rawDataFetcher, 'fetchAndStoreData')
+          .mockResolvedValue({ from: clusterDate, to: fromDate });
+
+        await rawDataFetcher.getDataForDateRanges(false, fromDate, false, clusterDate);
+
+        // The batch loop runs Math.floor(3168 records / 288) = 11 times.
+        // Each loop call passes this.numberOfRecords as the second arg.
+        // The final collection call passes lastRecordsLimit (not this.numberOfRecords)
+        // and should be excluded from this check.
+        const numCalls = fetchAndStoreDataSpy.mock.calls.length;
+        const batchCallCount = numCalls - 1; // subtract final collection call
+
+        for (let i = 0; i < batchCallCount; i++) {
+          const numRecords = fetchAndStoreDataSpy.mock.calls[i][1];
+          expect(numRecords).toBe(
+            288,
+            `Batch call ${i} (of ${batchCallCount}) should use maxNumRecords (288), but passed ${numRecords}`
+          );
+        }
+      });
     });
   });
 });

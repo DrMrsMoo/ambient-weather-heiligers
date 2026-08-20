@@ -255,7 +255,7 @@ class FetchRawData {
 
     if (estNumberOfBatches >= 1) {
       fetchRawDataLogger.logInfo('[getDataForDateRanges] [multi-day fetch] Setting up batched requests for batches:', { estNumberOfBatches: Math.floor(estNumberOfBatches) })
-      this.numberOfRecords = AW_CONSTANTS.maxNumRecordsCanGet;
+      this.numberOfRecords = AW_CONSTANTS.maxNumRecords;
       for (let i = 0; i < Math.floor(estNumberOfBatches); i++) {
         fetchRawDataLogger.logInfo('[getDataForDateRanges] [multi-day fetch] Issueing batch request:', { i: i + 1 })
         try {
