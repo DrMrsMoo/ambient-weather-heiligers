@@ -17,7 +17,7 @@ echo "Current production: $CURRENT_PROD"
 
 echo ""
 echo "🎯 Target deployment: $TARGET_REF"
-git fetch --all --tags
+git fetch --all --tags --force
 
 echo ""
 echo "📋 Changes to be deployed:"
