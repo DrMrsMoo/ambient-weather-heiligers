@@ -6,7 +6,7 @@
 
 set -e
 
-REPO_DIR="/Users/tina/Projects/ambient-weather-heiligers"
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET_REF="${1:-main}"
 
 cd "$REPO_DIR"
@@ -39,7 +39,7 @@ echo ""
 echo "🧪 Testing target version..."
 git checkout "$TARGET_REF"
 source .env
-/Users/tina/.nvm/versions/node/v23.5.0/bin/node runMainIIFE.js
+node runMainIIFE.js
 
 echo ""
 read "TEST_OK?✅ Did the test run succeed? (yes/no): "
