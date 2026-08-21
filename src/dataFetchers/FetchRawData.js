@@ -78,7 +78,7 @@ class FetchRawData {
 
   clearFileNames() {
     if (this.#recentDataFileNames && this.#recentDataFileNames.length > 0) {
-      fetchRawDataLogger.logInfo(`clearing ${this.recentDataFileNames.length()} file names`);
+      fetchRawDataLogger.logInfo(`clearing ${this.recentDataFileNames.length} file names`);
       this.#recentDataFileNames = [];
     } else {
       fetchRawDataLogger.logWarning(`No filenames to clear`)
@@ -286,7 +286,7 @@ class FetchRawData {
       } else {
         return { dataFetchForDates: this.datesArray, dataFileNames: this.recentDataFileNames };
       }
-    } else if (estTotalNumRecordsToFetch >= 2 && estTotalNumRecordsToFetch <= 288) {
+    } else if (estTotalNumRecordsToFetch >= 2 && estTotalNumRecordsToFetch <= AW_CONSTANTS.maxNumRecords) {
       // single day data fetch, do not fetch if only one record is needed.
       try {
         fetchRawDataLogger.logInfo('[getDataForDateRanges] [single-day fetch] Fewer than a 288-batch records required. Setting up request for records count:', { estTotalNumRecordsToFetch: estTotalNumRecordsToFetch });

@@ -77,6 +77,22 @@ describe('FetchRawData', () => {
     it.todo('adds tests for recentDataFileNames')
     it.todo('adds tests for skipSave')
   });
+  describe('class methods: clearFileNames', () => {
+    let rawDataFetcher;
+    beforeEach(() => {
+      rawDataFetcher = new FetchRawData(mockAWApi, mockFs);
+    });
+    it('clears the file names without throwing (regression: previously called .length())', () => {
+      rawDataFetcher.recentDataFileNames = ['1641684000000_1641752460000.json'];
+      rawDataFetcher.recentDataFileNames = '1641752700000_1641839100000.json';
+      expect(() => rawDataFetcher.clearFileNames()).not.toThrow();
+      expect(rawDataFetcher.recentDataFileNames).toEqual([]);
+    });
+    it('keeps the list empty when there is nothing to clear', () => {
+      rawDataFetcher.clearFileNames();
+      expect(rawDataFetcher.recentDataFileNames).toEqual([]);
+    });
+  });
   describe('class methods: extractDatesFromData', () => {
     let rawDataFetcher;
     beforeEach(() => {
