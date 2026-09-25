@@ -39,7 +39,7 @@ Use §7's **specific** assertions, never aggregates:
 A successful run proves the pipeline works. It does **not** prove your code is running (lessons §1).
 
 ⛔ **Do not use `git rev-parse --short HEAD` on the Pi after a run.** It is unsound and already
-produced a false alarm (`2026-08-20-deploy-pr24-record.md:148-173`):
+produced a false alarm ([2026-08-20-deploy-pr24-record.md](2026-08-20-deploy-pr24-record.md), lines 148-173):
 `fetchAndIndex-production.sh:168` runs `git checkout -` after the run, and the Pi's local `main`
 lags `origin/main`, so the tree shows stale code.
 

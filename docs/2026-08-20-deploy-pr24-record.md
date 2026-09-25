@@ -1,7 +1,7 @@
 # Deploy record — PR #24 (indexing hotfix) → production — 2026-08-20
 
 Authoritative post-deploy record. Supersedes
-`/Users/tina/Projects/ambient-weather-heiligers/2026-08-20-deploy-pr24-to-pi.md`, whose
+[2026-08-20-deploy-pr24-to-pi.md](2026-08-20-deploy-pr24-to-pi.md), whose
 **Step 3 verification recipe was wrong** — see *Caveats & gotchas*.
 
 - Status: **deployed and verified**
@@ -202,7 +202,7 @@ was deployed.** It will look stale no matter how successful the deploy was.
 
 ## Correct verification recipe for next time
 
-Replaces "Step 3" in `/Users/tina/Projects/ambient-weather-heiligers/2026-08-20-deploy-pr24-to-pi.md`.
+Replaces "Step 3" in [2026-08-20-deploy-pr24-to-pi.md](2026-08-20-deploy-pr24-to-pi.md).
 
 **1. Confirm the tag moved (Mac):**
 

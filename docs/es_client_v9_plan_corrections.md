@@ -108,7 +108,8 @@ grep -m1 '"version"' node_modules/@elastic/elasticsearch/package.json
 ```
 
 **The first line is unsound and already caused a false alarm** — documented in
-`2026-08-20-deploy-pr24-record.md:148-173`. `fetchAndIndex-production.sh:168` runs `git checkout -`
+[2026-08-20-deploy-pr24-record.md](2026-08-20-deploy-pr24-record.md), lines 148-173.
+`fetchAndIndex-production.sh:168` runs `git checkout -`
 after the run, and the Pi's local `main` lags `origin/main`, so post-run the tree shows stale code.
 
 **The second line is still sound** — `node_modules` is gitignored and is *not* restored by

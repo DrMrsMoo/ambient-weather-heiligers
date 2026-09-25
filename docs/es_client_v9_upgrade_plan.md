@@ -201,8 +201,11 @@ merely before it runs.
 - [ ] **4.1** Update `ELASTICSEARCH_UPGRADE_LESSONS.md` with 9.x findings; resolve the §10 open risks
 - [x] **4.2** ~~Stale-v7-branch cleanup~~ — done 2026-09-25, see below
 - [ ] **4.3** Decide the fate of `deployment` and `modernization-plan` (see below)
-- [ ] **4.4** Track or fold into `docs/` the untracked `2026-08-20-deploy-pr24-record.md` and
-      `2026-08-20-deploy-pr24-to-pi.md` — load-bearing, one `git clean` from gone
+- [x] **4.4** ~~Track the deploy records~~ — done 2026-09-25. Now at
+      [2026-08-20-deploy-pr24-record.md](2026-08-20-deploy-pr24-record.md) (authoritative; carries
+      the corrected verification recipe) and
+      [2026-08-20-deploy-pr24-to-pi.md](2026-08-20-deploy-pr24-to-pi.md) (superseded — its Step 3
+      recipe is the broken one)
 - [ ] **4.5** Fix the two dead launchd jobs (exit 127 on `/usr/local/bin/node`): monthly data
       archiving and weekly log archiving are **silently failing today**
 - [ ] **4.6** Correct `docs/CLAUDE.md`'s stale dev-dependency versions (jest 27.0.4, mock 0.3.1 are
