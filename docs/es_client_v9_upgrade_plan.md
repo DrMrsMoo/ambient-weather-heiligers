@@ -12,6 +12,7 @@ Upgrading `@elastic/elasticsearch` from **8.19.2** to **9.4.3+**, and the cluste
 
 | Doc | When to read it |
 |---|---|
+| [es_client_v9_phase1_prompt.md](es_client_v9_phase1_prompt.md) | **To execute Phase 1** — paste-ready, with its own execution order |
 | [es_client_v9_cluster_upgrade_requirements.md](es_client_v9_cluster_upgrade_requirements.md) | Before Phase 2 — Elastic's rules, upgrade paths, the 7.x index blocker |
 | [es_client_v9_verification_reference.md](es_client_v9_verification_reference.md) | **Whenever something looks broken** — false alarms, deploy assertions |
 | [es_client_v9_pi_runtime_findings.md](es_client_v9_pi_runtime_findings.md) | Before Phase 3.7 — Node/ARM constraints and the Pi's runtime problems |
@@ -132,6 +133,10 @@ script-level clients have no tests.
 - [ ] **0.5** Review breaking changes across **all** of 9.0 → 9.4; run snapshot-repository analysis
 
 ### Phase 1 — Harden tests against the current client
+
+📌 **Ready-to-use prompt:** [es_client_v9_phase1_prompt.md](es_client_v9_phase1_prompt.md).
+⚠️ It specifies a **different execution order** from the numbering below — task 0 (the
+`coverageReporters` fix) first, and **1.6 before 1.5**. Follow the prompt's order.
 
 - [ ] **1.1** Replace hand-rolled mocks with `@elastic/elasticsearch-mock` in
       `esClientMethods.test.js` (Gap 1)
